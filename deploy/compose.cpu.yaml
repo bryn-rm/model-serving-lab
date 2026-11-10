@@ -1,0 +1,8 @@
+services:
+  mockllm:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.cpu
+    ports:
+      - "127.0.0.1:8000:8000"
+    stop_grace_period: 10s

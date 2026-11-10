@@ -1,0 +1,3 @@
+event: error
+data: {"error":{"message":"synthetic failure","type":"server_error"}}
+

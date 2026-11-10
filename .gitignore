@@ -31,3 +31,11 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local build instructions
+/BUILD_PLAN.md
+
+# Local lab artifacts
+/bin/
+/results/
+/measurement.json
