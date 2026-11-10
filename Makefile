@@ -7,6 +7,7 @@ check:
 	CC=clang CGO_ENABLED=1 $(GO) test -race ./...
 build:
 	$(GO) build -o bin/lab ./cmd/lab
+	$(GO) build -o bin/gateway ./cmd/gateway
 	$(GO) build -o bin/mockllm ./cmd/mockllm
 mock-up:
 	docker compose -f deploy/compose.cpu.yaml up --build -d

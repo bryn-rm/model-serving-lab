@@ -10,10 +10,12 @@ import (
 	"mime"
 	"net/http"
 	"net/http/httptrace"
+	"strings"
 	"sync"
 	"time"
 
 	"model-serving-lab/internal/sse"
+	"model-serving-lab/internal/stream"
 )
 
 type Options struct {
@@ -50,9 +52,7 @@ type Observation struct {
 }
 
 func NewClient() *http.Client {
-	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
-	return &http.Client{Transport: &http.Transport{Protocols: protocols, MaxIdleConns: 512, MaxIdleConnsPerHost: 512, MaxConnsPerHost: 256, IdleConnTimeout: 90 * time.Second, ForceAttemptHTTP2: false}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return &http.Client{Transport: stream.NewTransport(512, 256), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 func Run(parent context.Context, client *http.Client, opt Options, output io.Writer) (obs Observation, result error) {
 	start := time.Now()
@@ -70,25 +70,24 @@ func Run(parent context.Context, client *http.Client, opt Options, output io.Wri
 			}
 		}
 	}()
-	if opt.Total <= 0 || opt.FirstText <= 0 || opt.Idle <= 0 || opt.MaxEvent <= 0 {
+	deadlines := stream.Deadlines{Total: opt.Total, FirstText: opt.FirstText, Idle: opt.Idle}
+	if deadlines.Validate() != nil || opt.MaxEvent <= 0 {
 		return obs, errors.New("deadlines and event limit must be positive")
 	}
-	totalCtx, totalCancel := context.WithTimeout(parent, opt.Total)
-	defer totalCancel()
-	ctx, cancel := context.WithCancelCause(totalCtx)
-	defer cancel(nil)
+	ctx, watch := stream.Start(parent, deadlines)
+	defer watch.Stop()
 	defer func() {
-		if result != nil && ctx.Err() != nil {
-			cause := context.Cause(ctx)
+		if result == nil {
+			return
+		}
+		if reason, cause := stream.Reason(ctx); reason != "" {
 			obs.ErrorCode = "canceled"
-			if errors.Is(cause, context.DeadlineExceeded) {
+			if strings.HasSuffix(reason, "_timeout") {
 				obs.ErrorCode = "timeout"
 			}
 			result = fmt.Errorf("%w: %v", cause, result)
 		}
 	}()
-	firstTimer := time.AfterFunc(opt.FirstText, func() { cancel(fmt.Errorf("first text: %w", context.DeadlineExceeded)) })
-	defer firstTimer.Stop()
 	body, _ := json.Marshal(map[string]any{"model": opt.Model, "messages": []map[string]string{{"role": "user", "content": opt.Prompt}}, "stream": true, "max_tokens": 128, "stream_options": map[string]bool{"include_usage": true}})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, opt.URL, bytes.NewReader(body))
 	if err != nil {
@@ -120,9 +119,8 @@ func Run(parent context.Context, client *http.Client, opt Options, output io.Wri
 	if err != nil || media != "text/event-stream" {
 		return obs, errors.New("expected text/event-stream")
 	}
-	idle := time.AfterFunc(opt.Idle, func() { cancel(fmt.Errorf("stream idle: %w", context.DeadlineExceeded)) })
-	defer idle.Stop()
-	decoder := sse.NewDecoder(&activityReader{r: resp.Body, timer: idle, idle: opt.Idle}, opt.MaxEvent)
+	watch.StartIdle()
+	decoder := sse.NewDecoder(watch.Reader(resp.Body), opt.MaxEvent)
 	for {
 		event, err := decoder.Next()
 		if err != nil {
@@ -132,77 +130,39 @@ func Run(parent context.Context, client *http.Client, opt Options, output io.Wri
 			}
 			return obs, err
 		}
-		if event.Type == "error" {
-			obs.ErrorCode = "sse_error"
-			return obs, fmt.Errorf("SSE error: %s", event.Data)
+		chunk, err := stream.Inspect(event)
+		if err != nil {
+			return obs, err
 		}
-		if event.Data == "[DONE]" {
+		if chunk.Error != "" {
+			obs.ErrorCode = "sse_error"
+			return obs, fmt.Errorf("upstream error: %s", chunk.Error)
+		}
+		if chunk.Done {
 			v := elapsed()
 			obs.Done = &v
 			obs.Outcome = "success"
 			return obs, nil
 		}
-		var chunk struct {
-			Choices []struct {
-				Delta struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-				FinishReason *string `json:"finish_reason"`
-			} `json:"choices"`
-			Usage *struct {
-				PromptTokens     int `json:"prompt_tokens"`
-				CompletionTokens int `json:"completion_tokens"`
-			} `json:"usage"`
-			Error  json.RawMessage `json:"error"`
-			Object string          `json:"object"`
-		}
-		if err := json.Unmarshal([]byte(event.Data), &chunk); err != nil {
-			return obs, fmt.Errorf("invalid stream JSON: %w", err)
-		}
-		if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
-			obs.ErrorCode = "sse_error"
-			return obs, fmt.Errorf("upstream error: %s", chunk.Error)
-		}
-		if chunk.Object == "error" { // older vLLM flat ErrorResponse shape
-			obs.ErrorCode = "sse_error"
-			return obs, fmt.Errorf("upstream error: %s", event.Data)
-		}
 		if chunk.Usage != nil {
 			obs.PromptTokens = &chunk.Usage.PromptTokens
 			obs.CompletionTokens = &chunk.Usage.CompletionTokens
 		}
-		for _, choice := range chunk.Choices {
-			if choice.FinishReason != nil {
-				obs.FinishReason = *choice.FinishReason
-			}
-			if choice.Delta.Content == "" {
-				continue
-			}
+		if chunk.FinishReason != "" {
+			obs.FinishReason = chunk.FinishReason
+		}
+		for _, text := range chunk.Text {
 			v := elapsed()
 			if obs.FirstText == nil {
 				obs.FirstText = &v
-				firstTimer.Stop()
+				watch.Text()
 			} else {
 				obs.Gaps = append(obs.Gaps, v-*obs.LastText)
 			}
 			obs.LastText = &v
-			if _, err := io.WriteString(output, choice.Delta.Content); err != nil {
+			if _, err := io.WriteString(output, text); err != nil {
 				return obs, err
 			}
 		}
 	}
-}
-
-type activityReader struct {
-	r     io.Reader
-	timer *time.Timer
-	idle  time.Duration
-}
-
-func (r *activityReader) Read(p []byte) (int, error) {
-	n, e := r.r.Read(p)
-	if n > 0 {
-		r.timer.Reset(r.idle)
-	}
-	return n, e
 }

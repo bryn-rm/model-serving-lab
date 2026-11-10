@@ -1,62 +1,64 @@
 # Build status — 10 November 2026
 
-- **Phase 0 CPU fallback complete; Phase 1 complete.** Go 1.27.3 is pinned in
-  `go.mod`, CI and the CPU Dockerfile. Standard library only; Clang 18.1.3
-  supports race checks. No prior implementation or Python scaffolding existed.
-- Added `lab smoke`, a simulated SSE server with configurable event delay and
-  flushed fragmentation, bounded decoding, streamed stdout, separate measurement
-  JSON, deadlines, cancellation, usage and failure reporting. Fixtures and mock
-  measurements are explicitly synthetic; token counts are invented.
-- **Verified:** `make check` (gofmt check, `go vet ./...`,
-  `CC=clang CGO_ENABLED=1 go test -race ./...`), `make build`,
-  `docker compose -f deploy/compose.cpu.yaml config --quiet`, `git diff --check`.
-  HTTP tests required execution outside the agent sandbox, which blocks listeners.
-  Native binary smoke checks passed with 3-byte flushed fragments: success exits
-  0; truncation exits 1 and preserves text timings in failure JSON.
-- Tests cover arbitrary fragmentation, multiline/CRLF, comments, empty/role
-  deltas, finish reason, usage, SSE/JSON/HTTP errors, oversized events/lines,
-  truncation, early text, output errors, cancellation and all three deadlines.
-- Decisions: the `go 1.27.3` directive supplies the initial toolchain pin;
-  `go mod tidy` removes an identical redundant `toolchain` directive. Make uses
-  `/tmp/model-serving-lab-go-cache` because the default home cache is read-only
-  here. Smoke JSON is diagnostic; Phase 3 run artifacts are not implemented.
-- **Pending GPU access:** real sanitized successful/usage/error stream captures,
-  headers, `/metrics`, startup evidence, vLLM v0.33.0 image compatibility/digest,
-  and model/tokenizer commit pins. Candidate settings are recorded in
-  `configs/environment.json`; none have been GPU-verified. CPU Compose validates
-  but container startup was not tested: this session cannot access the Docker
-  daemon. The native CPU path is verified and needs no Docker or model download.
-- `BUILD_PLAN.md` is unchanged and its existing `.gitignore` rule is preserved.
-- **Review (10 Nov, Claude):** Phases 0 (CPU fallback) and 1 meet their gates.
-  Fixes applied: (1) the legacy flat vLLM error body (`{"object":"error",…}`)
-  was silently skipped and could report success when followed by `[DONE]`;
-  it is now an `sse_error`. (2) The transport's fixed 120s
-  `ResponseHeaderTimeout` was removed: header waits are covered by the
-  configurable first-text deadline and are now classified `timeout`, not
-  `transport_error`. (3) New tests: error-after-text then `[DONE]` (keeps
-  first-text timing), legacy error shape, first-text deadline while awaiting
-  headers. Re-verified `make check`, `go test -race -count=5`, `make build`,
-  `git diff --check` and native smoke (success exit 0; error exit 1).
-- **Watch at first GPU capture:** confirm vLLM's real mid-stream error shape
-  (the synthetic fixture's `event: error` is not vLLM's format); confirm
-  `usage` arrives as a separate `choices: []` chunk.
-- **Next action:** Phase 2 gateway — validated byte-preserving forwarding,
-  auth, admission (429 + `Retry-After`), deadlines, cancellation, metrics.
-  Reuse `internal/sse` and the smoke transport settings.
+## Completed
+- **Phase 0 (CPU fallback), Phase 1 and Phase 2 complete.** Go 1.27.3;
+  one direct dependency, `github.com/prometheus/client_golang v1.25.0`. Fixtures and token counts remain **synthetic**.
+- **Phase 2 gateway** (`cmd/gateway`, `internal/gateway`): bearer auth
+  (`LAB_GATEWAY_API_KEY`) separate from the upstream credential
+  (`LAB_UPSTREAM_API_KEY`); strict whitelist validation (no nulls, integral
+  integers, one output limit ≤ `--max-output-tokens`, text-only messages);
+  original body bytes forwarded unchanged; immediate semaphore admission
+  (`--admission-cap`, 0 disables) with JSON 429 + `Retry-After`; slot held
+  from dispatch to terminal outcome and released by `defer`; early flushed
+  streaming; shared first-text/idle/total deadlines; per-write downstream
+  deadlines; JSON errors before headers, SSE error (no `[DONE]`) after;
+  upstream error events (current and legacy vLLM shapes) forwarded and
+  recorded as failures; no retries; `X-Lab-Request-ID`, validated
+  `X-Request-ID` echo and `X-Lab-Admitted`; JSON logs carry body length and
+  SHA-256, never keys or prompts; admin listener `:8081` serves `/healthz`,
+  `/readyz` (upstream `/health` + drain state) and `/metrics`; bounded
+  shutdown (grace, then SSE `shutdown` error, ≤ grace + write timeout + 1s).
+- **Shared code:** `internal/stream` now holds deadlines, event inspection and
+  the transport, used by both `lab smoke` and the gateway. Phase 1 tests pass
+  unchanged, so the Phase 1 review fixes are preserved. The gateway transport
+  sets no per-host connection cap (admission is the only limiter) and keeps
+  512 idle connections (`--upstream-idle-conns`).
+- The mock now also serves `/health` and enforces `LAB_UPSTREAM_API_KEY` when set.
 
-From the repository root, terminal 1:
+## Phase 2 review alterations (10 Nov)
+- Release admission immediately after forwarding `[DONE]`; an upstream that
+  keeps its response open can no longer retain a slot until a deadline.
+  Connections already read through EOF remain reusable; otherwise the body
+  is closed rather than blocking terminal completion to drain it.
+- Reject duplicate JSON keys, including nested and escaped duplicate keys,
+  before dispatch. Validated request bytes are still forwarded unchanged.
+- Treat `event: error` with empty data as a failure in the shared inspector
+  used by the gateway and smoke client.
+- Reject upstream URLs containing credentials, queries or fragments and
+  malformed readiness paths at startup, preventing ambiguous routing,
+  credential logging and readiness-handler failures.
+- Correct README dependency guidance: the gateway requires the pinned
+  Prometheus Go client and its transitive dependencies.
+- Add regression coverage for terminal streams without EOF, duplicate-key
+  rejection before dispatch, invalid configuration and empty error events.
 
-```sh
-make build
-./bin/mockllm --addr 127.0.0.1:8000
-```
+## Review verification (10 Nov)
+- `make check`: pass (formatting, vet and `go test -race ./...`). The initial
+  sandbox run could not open local TCP test listeners; the full check passed
+  when rerun with the required access.
+- Focused gateway tests, `make build` and `git diff --check`: pass.
+- Existing tests cover auth, body parity, early streaming, overload/recovery,
+  cancellation, deadlines, failure-path slot release, stalled clients,
+  readiness/metrics and bounded shutdown. New regression tests also pass.
+- Docker and native smoke/SIGTERM demos were reported passing by the original
+  implementer; they were not repeated in this review.
 
-Terminal 2, also from the repository root:
+## Pending GPU access
+Real sanitized stream captures (including vLLM's real mid-stream error
+shape), headers, `/metrics`, startup evidence, vLLM v0.33.0 image digest and
+compatibility, model/tokenizer revisions. `configs/environment.json` holds
+unverified candidate settings. GPU Compose (`make gpu-up`) is not written.
 
-```sh
-./bin/lab smoke --output /tmp/measurement.json
-cat /tmp/measurement.json
-```
-
-Stop the server with Ctrl-C. Optional CPU containers: `make mock-up` /
-`make mock-down`. Verification: `make check`.
+## Next action
+Phase 3: `lab bench` (closed/open-loop), per-attempt JSONL, manifest,
+failure-aware summaries, then E1 on the mock.

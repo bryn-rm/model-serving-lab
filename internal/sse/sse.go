@@ -59,3 +59,17 @@ func (d *Decoder) Next() (Event, error) {
 	// An unterminated event is never dispatched.
 	return Event{}, io.EOF
 }
+
+// Encode serialises e with LF framing. Comments, ids and retry fields are not
+// preserved; Decode(Encode(e)) yields e.
+func (e Event) Encode() []byte {
+	var b strings.Builder
+	if e.Type != "" {
+		b.WriteString("event: " + e.Type + "\n")
+	}
+	for _, line := range strings.Split(e.Data, "\n") {
+		b.WriteString("data: " + line + "\n")
+	}
+	b.WriteString("\n")
+	return []byte(b.String())
+}

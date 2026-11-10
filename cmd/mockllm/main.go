@@ -30,7 +30,7 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	server := &http.Server{Addr: *addr, Handler: (mockllm.Server{Fixture: data, Delay: *delay, FragmentBytes: *fragment}).Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second}
+	server := &http.Server{Addr: *addr, Handler: (mockllm.Server{Fixture: data, Delay: *delay, FragmentBytes: *fragment, APIKey: os.Getenv("LAB_UPSTREAM_API_KEY")}).Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second}
 	drained := make(chan struct{})
 	go func() {
 		defer close(drained)

@@ -13,12 +13,21 @@ type Server struct {
 	Fixture       []byte
 	Delay         time.Duration
 	FragmentBytes int
+	APIKey        string // when set, chat requests must send this bearer token
 }
 
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
+	health := func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) }
+	mux.HandleFunc("GET /healthz", health)
+	mux.HandleFunc("GET /health", health) // vLLM's readiness path
 	mux.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		if s.APIKey != "" && r.Header.Get("Authorization") != "Bearer "+s.APIKey {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":{"message":"synthetic mock: invalid API key","type":"authentication_error"}}` + "\n"))
+			return
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		if _, err := io.Copy(io.Discard, r.Body); err != nil {
 			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)

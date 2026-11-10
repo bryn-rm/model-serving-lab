@@ -1,12 +1,13 @@
 # model-serving-lab
 
-A Go inference streaming client and simulated server, developed toward an
+A Go streaming gateway, client and simulated server, developed toward an
 admission-control experiment around vLLM. Phases 0–1 use CPU-only Codespaces;
 all current fixtures and token counts are **synthetic**. No GPU performance
 results or real vLLM protocol captures are claimed.
 
 Requires Go **1.27.3**. Race checks use Clang (tested with 18.1.3).
-No model downloads or third-party Go dependencies are needed.
+No model downloads are needed. The gateway uses the Prometheus Go client;
+Go downloads the pinned dependencies on the first build.
 
 ```sh
 export GOCACHE=/tmp/model-serving-lab-go-cache
@@ -34,12 +35,26 @@ small fragments, and `--fixture testdata/streams/synthetic-error.sse` (or
 not a request validator or inference engine. It binds loopback by default,
 limits request bodies, flushes events and stops on cancellation.
 
-Optional container path: `make mock-up` / `make mock-down` (Docker Compose).
+Gateway (Phase 2): `LAB_GATEWAY_API_KEY` is required from clients;
+`LAB_UPSTREAM_API_KEY` (optional) is sent upstream and enforced by the mock.
+Public API on `127.0.0.1:8080`, admin (`/healthz`, `/readyz`, `/metrics`) on
+`127.0.0.1:8081`. `--admission-cap N` (0 disables) returns 429 with
+`Retry-After` when full. Run `./bin/gateway -h` for deadlines and limits.
+
+```sh
+export LAB_GATEWAY_API_KEY=dev-gateway-key
+./bin/mockllm &                     # upstream on :8000
+./bin/gateway --admission-cap 64 &  # gateway on :8080, admin on :8081
+LAB_API_KEY=$LAB_GATEWAY_API_KEY ./bin/lab smoke --url http://127.0.0.1:8080/v1/chat/completions
+```
+
+Optional container path: `make mock-up` / `make mock-down` (Docker Compose;
+mock, gateway and admin ports; requires `LAB_GATEWAY_API_KEY`).
 Use only one server on port 8000 at a time. Local commands are the primary
 Codespaces path. `make gpu-up` reports the unresolved GPU prerequisites.
 
 Layout: `cmd/` entry points, `internal/` protocol/client/replay code,
 `testdata/streams/` synthetic fixtures and provenance, `configs/` environment
-pins, `deploy/` CPU container setup, `docs/` experiment hypotheses. Gateway,
+pins, `deploy/` CPU container setup, `docs/` experiment hypotheses. Benchmark
 load generation, summaries and GPU deployment belong to later phases.
 See [BUILD_STATUS.md](BUILD_STATUS.md) for verification and pending work.

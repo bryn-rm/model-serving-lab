@@ -1,8 +1,25 @@
+# CPU-only synthetic stack: mock upstream (8000), gateway (8080), gateway
+# admin (8081). All ports bind host loopback. Requires LAB_GATEWAY_API_KEY.
 services:
   mockllm:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.cpu
+    image: model-serving-lab-cpu:local
+    environment:
+      LAB_UPSTREAM_API_KEY: ${LAB_UPSTREAM_API_KEY:-}
     ports:
       - "127.0.0.1:8000:8000"
     stop_grace_period: 10s
+  gateway:
+    image: model-serving-lab-cpu:local
+    depends_on: [mockllm]
+    entrypoint: ["/gateway"]
+    command: ["--addr", "0.0.0.0:8080", "--admin-addr", "0.0.0.0:8081", "--upstream", "http://mockllm:8000", "--admission-cap", "${LAB_ADMISSION_CAP:-64}"]
+    environment:
+      LAB_GATEWAY_API_KEY: ${LAB_GATEWAY_API_KEY:?set LAB_GATEWAY_API_KEY}
+      LAB_UPSTREAM_API_KEY: ${LAB_UPSTREAM_API_KEY:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+    stop_grace_period: 15s

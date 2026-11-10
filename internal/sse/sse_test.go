@@ -50,3 +50,11 @@ func TestBoundsAndEOF(t *testing.T) {
 		}
 	}
 }
+func TestEncodeRoundTrip(t *testing.T) {
+	for _, e := range []Event{{Data: "[DONE]"}, {Type: "error", Data: "a\n b\n"}, {Data: " leading space"}, {Data: ""}} {
+		got, err := NewDecoder(strings.NewReader(string(e.Encode())), 1024).Next()
+		if err != nil || got != e {
+			t.Fatalf("%q -> %q %v", e, got, err)
+		}
+	}
+}
