@@ -1,7 +1,7 @@
 # model-serving-lab
 
 A Go streaming gateway, client and simulated server, developed toward an
-admission-control experiment around vLLM. Phases 0–1 use CPU-only Codespaces;
+admission-control experiment around vLLM. Phases 0–3 use CPU-only Codespaces;
 all current fixtures and token counts are **synthetic**. No GPU performance
 results or real vLLM protocol captures are claimed.
 
@@ -55,6 +55,24 @@ Codespaces path. `make gpu-up` reports the unresolved GPU prerequisites.
 
 Layout: `cmd/` entry points, `internal/` protocol/client/replay code,
 `testdata/streams/` synthetic fixtures and provenance, `configs/` environment
-pins, `deploy/` CPU container setup, `docs/` experiment hypotheses. Benchmark
-load generation, summaries and GPU deployment belong to later phases.
+pins, `deploy/` CPU container setup, `docs/` experiment hypotheses and results.
+Phase 3 includes closed/open-loop benchmarks and offline summaries. GPU
+deployment and real-engine experiments belong to Phase 4.
 See [BUILD_STATUS.md](BUILD_STATUS.md) for verification and pending work.
+
+
+Benchmark quick start (synthetic, native servers are started and cleaned up):
+
+```sh
+make build
+bash scripts/demo-bench.sh
+python3 scripts/run-e1.py
+```
+
+The demo runs and summarises both modes. E1 uses 2,000 attempts per repeat,
+three repeats, direct/gateway targets at concurrency 1 and 32. Each benchmark
+prints its unique run directory under `results/`; raw records are synced to
+`requests.jsonl` before offline summarisation. See
+[benchmarking.md](docs/benchmarking.md) for tested commands and configuration,
+[benchmark-contract.md](docs/benchmark-contract.md) for failure/partial-run
+semantics, and [e1-mock.md](docs/e1-mock.md) for measured synthetic results.

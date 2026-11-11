@@ -1,0 +1,614 @@
+{
+  "synthetic": true,
+  "source": "results/e1-phase3-final/e1-index.json",
+  "platform": "Linux-6.8.0-1064-azure-x86_64-with-glibc2.39",
+  "logical_cpus": 2,
+  "affinity_cpus": 2,
+  "conditions": [
+    {
+      "workers": 1,
+      "target": "mock-direct",
+      "run": "/workspaces/model-serving-lab/results/e1-phase3-final/runs/20261110T200956.280903086Z-O43SWW4EZP",
+      "elapsed_seconds": 51.176756105000095,
+      "cpu_seconds_mock": 3.82,
+      "cpu_seconds_gateway": 0.0,
+      "cpu_seconds_generator_and_offline_summary": 4.080833,
+      "run_id": "20261110T200956.280903086Z-O43SWW4EZP",
+      "git_sha": "1f772716af5f341083d36fe5773b75286f9a36c0",
+      "git_dirty": true,
+      "started_utc": "2026-11-10T20:09:56.281209776Z",
+      "body_sha256": "63e7d0b9e72d9a922f833b4fb695637839fbc99684e8bee269788c3392a84fcd",
+      "transport": {
+        "automatic_retries": false,
+        "disable_compression": true,
+        "idle_timeout_seconds": 90,
+        "max_connections_per_host": 0,
+        "max_idle_connections": 512,
+        "max_idle_connections_per_host": 512,
+        "protocol": "HTTP/1.1",
+        "redirects": false,
+        "terminal_eof_drain_max_bytes": 65536,
+        "terminal_eof_drain_ms": 5
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 2000,
+            "admitted": 0,
+            "connection_gets": 2000,
+            "connections_idle": 2000,
+            "connections_reused": 2000,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.319204,
+          "first_byte_p95_ms": 1.9777,
+          "first_text_p50_ms": 3.588234,
+          "first_text_p95_ms": 4.624699,
+          "completion_p50_ms": 8.095853,
+          "completion_p95_ms": 9.652627,
+          "client_reuse_fraction": 1,
+          "scheduling_delay_p95_ms": 0.0005490000003192108
+        },
+        {
+          "repeat": 2,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 2000,
+            "admitted": 0,
+            "connection_gets": 2000,
+            "connections_idle": 2000,
+            "connections_reused": 2000,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.306249,
+          "first_byte_p95_ms": 1.986909,
+          "first_text_p50_ms": 3.57884,
+          "first_text_p95_ms": 4.634426,
+          "completion_p50_ms": 8.068484,
+          "completion_p95_ms": 9.454725,
+          "client_reuse_fraction": 1,
+          "scheduling_delay_p95_ms": 0.00047700000050099334
+        },
+        {
+          "repeat": 3,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 2000,
+            "admitted": 0,
+            "connection_gets": 2000,
+            "connections_idle": 2000,
+            "connections_reused": 2000,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.302532,
+          "first_byte_p95_ms": 1.853714,
+          "first_text_p50_ms": 3.570991,
+          "first_text_p95_ms": 4.520203,
+          "completion_p50_ms": 8.052564,
+          "completion_p95_ms": 9.350675,
+          "client_reuse_fraction": 1,
+          "scheduling_delay_p95_ms": 0.0005020000007789349
+        }
+      ],
+      "aggregate": {
+        "first_byte_p50_ms": {
+          "median": 1.306249,
+          "min": 1.302532,
+          "max": 1.319204
+        },
+        "first_byte_p95_ms": {
+          "median": 1.9777,
+          "min": 1.853714,
+          "max": 1.986909
+        },
+        "first_text_p50_ms": {
+          "median": 3.57884,
+          "min": 3.570991,
+          "max": 3.588234
+        },
+        "first_text_p95_ms": {
+          "median": 4.624699,
+          "min": 4.520203,
+          "max": 4.634426
+        },
+        "completion_p95_ms": {
+          "median": 9.454725,
+          "min": 9.350675,
+          "max": 9.652627
+        }
+      }
+    },
+    {
+      "workers": 1,
+      "target": "mock-gateway",
+      "run": "/workspaces/model-serving-lab/results/e1-phase3-final/runs/20261110T201047.567859436Z-YTC6U2OJGJ",
+      "elapsed_seconds": 54.63105707299974,
+      "cpu_seconds_mock": 4.0600000000000005,
+      "cpu_seconds_gateway": 5.69,
+      "cpu_seconds_generator_and_offline_summary": 4.344271000000001,
+      "run_id": "20261110T201047.567859436Z-YTC6U2OJGJ",
+      "git_sha": "1f772716af5f341083d36fe5773b75286f9a36c0",
+      "git_dirty": true,
+      "started_utc": "2026-11-10T20:10:47.568005232Z",
+      "body_sha256": "63e7d0b9e72d9a922f833b4fb695637839fbc99684e8bee269788c3392a84fcd",
+      "transport": {
+        "automatic_retries": false,
+        "disable_compression": true,
+        "idle_timeout_seconds": 90,
+        "max_connections_per_host": 0,
+        "max_idle_connections": 512,
+        "max_idle_connections_per_host": 512,
+        "protocol": "HTTP/1.1",
+        "redirects": false,
+        "terminal_eof_drain_max_bytes": 65536,
+        "terminal_eof_drain_ms": 5
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 0,
+            "admitted": 2000,
+            "connection_gets": 2000,
+            "connections_idle": 2000,
+            "connections_reused": 2000,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.732313,
+          "first_byte_p95_ms": 2.782398,
+          "first_text_p50_ms": 4.005411,
+          "first_text_p95_ms": 5.264685,
+          "completion_p50_ms": 8.556956,
+          "completion_p95_ms": 10.162911,
+          "client_reuse_fraction": 1,
+          "scheduling_delay_p95_ms": 0.00045200000022305176,
+          "upstream_connection_reused": 2000,
+          "upstream_connection_new": 0
+        },
+        {
+          "repeat": 2,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 0,
+            "admitted": 2000,
+            "connection_gets": 2000,
+            "connections_idle": 2000,
+            "connections_reused": 2000,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.710488,
+          "first_byte_p95_ms": 2.57035,
+          "first_text_p50_ms": 3.961444,
+          "first_text_p95_ms": 5.073109,
+          "completion_p50_ms": 8.465736,
+          "completion_p95_ms": 9.900612,
+          "client_reuse_fraction": 1,
+          "scheduling_delay_p95_ms": 0.0005000000001018634,
+          "upstream_connection_reused": 2000,
+          "upstream_connection_new": 0
+        },
+        {
+          "repeat": 3,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 0,
+            "admitted": 2000,
+            "connection_gets": 2000,
+            "connections_idle": 2000,
+            "connections_reused": 2000,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.739936,
+          "first_byte_p95_ms": 2.668777,
+          "first_text_p50_ms": 4.011334,
+          "first_text_p95_ms": 5.22449,
+          "completion_p50_ms": 8.568376,
+          "completion_p95_ms": 10.225652,
+          "client_reuse_fraction": 1,
+          "scheduling_delay_p95_ms": 0.0004459999981918372,
+          "upstream_connection_reused": 2000,
+          "upstream_connection_new": 0
+        }
+      ],
+      "aggregate": {
+        "first_byte_p50_ms": {
+          "median": 1.732313,
+          "min": 1.710488,
+          "max": 1.739936
+        },
+        "first_byte_p95_ms": {
+          "median": 2.668777,
+          "min": 2.57035,
+          "max": 2.782398
+        },
+        "first_text_p50_ms": {
+          "median": 4.005411,
+          "min": 3.961444,
+          "max": 4.011334
+        },
+        "first_text_p95_ms": {
+          "median": 5.22449,
+          "min": 5.073109,
+          "max": 5.264685
+        },
+        "completion_p95_ms": {
+          "median": 10.162911,
+          "min": 9.900612,
+          "max": 10.225652
+        }
+      }
+    },
+    {
+      "workers": 32,
+      "target": "mock-gateway",
+      "run": "/workspaces/model-serving-lab/results/e1-phase3-final/runs/20261110T201142.327117525Z-HRJUC5XAJI",
+      "elapsed_seconds": 10.79850846499994,
+      "cpu_seconds_mock": 1.3600000000000003,
+      "cpu_seconds_gateway": 3.3199999999999994,
+      "cpu_seconds_generator_and_offline_summary": 2.4729040000000007,
+      "run_id": "20261110T201142.327117525Z-HRJUC5XAJI",
+      "git_sha": "1f772716af5f341083d36fe5773b75286f9a36c0",
+      "git_dirty": true,
+      "started_utc": "2026-11-10T20:11:42.327310481Z",
+      "body_sha256": "63e7d0b9e72d9a922f833b4fb695637839fbc99684e8bee269788c3392a84fcd",
+      "transport": {
+        "automatic_retries": false,
+        "disable_compression": true,
+        "idle_timeout_seconds": 90,
+        "max_connections_per_host": 0,
+        "max_idle_connections": 512,
+        "max_idle_connections_per_host": 512,
+        "protocol": "HTTP/1.1",
+        "redirects": false,
+        "terminal_eof_drain_max_bytes": 65536,
+        "terminal_eof_drain_ms": 5
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 0,
+            "admitted": 2000,
+            "connection_gets": 2000,
+            "connections_idle": 1944,
+            "connections_reused": 1955,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 3.389365,
+          "first_byte_p95_ms": 14.680712,
+          "first_text_p50_ms": 6.617109,
+          "first_text_p95_ms": 18.362475,
+          "completion_p50_ms": 12.912445,
+          "completion_p95_ms": 28.74521,
+          "client_reuse_fraction": 0.9775,
+          "scheduling_delay_p95_ms": 0.0005820000000085201,
+          "upstream_connection_reused": 1972,
+          "upstream_connection_new": 28
+        },
+        {
+          "repeat": 2,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 0,
+            "admitted": 2000,
+            "connection_gets": 2000,
+            "connections_idle": 1965,
+            "connections_reused": 1969,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 2.819621,
+          "first_byte_p95_ms": 13.326639,
+          "first_text_p50_ms": 5.94649,
+          "first_text_p95_ms": 18.10951,
+          "completion_p50_ms": 12.127911,
+          "completion_p95_ms": 26.518551,
+          "client_reuse_fraction": 0.9845,
+          "scheduling_delay_p95_ms": 0.0005899999996472616,
+          "upstream_connection_reused": 2000,
+          "upstream_connection_new": 0
+        },
+        {
+          "repeat": 3,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 0,
+            "admitted": 2000,
+            "connection_gets": 2000,
+            "connections_idle": 1967,
+            "connections_reused": 1977,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 3.126387,
+          "first_byte_p95_ms": 15.756235,
+          "first_text_p50_ms": 6.294764,
+          "first_text_p95_ms": 20.328802,
+          "completion_p50_ms": 12.547043,
+          "completion_p95_ms": 27.474323,
+          "client_reuse_fraction": 0.9885,
+          "scheduling_delay_p95_ms": 0.0005999999999630745,
+          "upstream_connection_reused": 2000,
+          "upstream_connection_new": 0
+        }
+      ],
+      "aggregate": {
+        "first_byte_p50_ms": {
+          "median": 3.126387,
+          "min": 2.819621,
+          "max": 3.389365
+        },
+        "first_byte_p95_ms": {
+          "median": 14.680712,
+          "min": 13.326639,
+          "max": 15.756235
+        },
+        "first_text_p50_ms": {
+          "median": 6.294764,
+          "min": 5.94649,
+          "max": 6.617109
+        },
+        "first_text_p95_ms": {
+          "median": 18.362475,
+          "min": 18.10951,
+          "max": 20.328802
+        },
+        "completion_p95_ms": {
+          "median": 27.474323,
+          "min": 26.518551,
+          "max": 28.74521
+        }
+      }
+    },
+    {
+      "workers": 32,
+      "target": "mock-direct",
+      "run": "/workspaces/model-serving-lab/results/e1-phase3-final/runs/20261110T201153.237338390Z-C7Q5LPDAT3",
+      "elapsed_seconds": 6.632576807000078,
+      "cpu_seconds_mock": 1.1999999999999993,
+      "cpu_seconds_gateway": 0.0,
+      "cpu_seconds_generator_and_offline_summary": 2.107023999999999,
+      "run_id": "20261110T201153.237338390Z-C7Q5LPDAT3",
+      "git_sha": "1f772716af5f341083d36fe5773b75286f9a36c0",
+      "git_dirty": true,
+      "started_utc": "2026-11-10T20:11:53.237447698Z",
+      "body_sha256": "63e7d0b9e72d9a922f833b4fb695637839fbc99684e8bee269788c3392a84fcd",
+      "transport": {
+        "automatic_retries": false,
+        "disable_compression": true,
+        "idle_timeout_seconds": 90,
+        "max_connections_per_host": 0,
+        "max_idle_connections": 512,
+        "max_idle_connections_per_host": 512,
+        "protocol": "HTTP/1.1",
+        "redirects": false,
+        "terminal_eof_drain_max_bytes": 65536,
+        "terminal_eof_drain_ms": 5
+      },
+      "repeats": [
+        {
+          "repeat": 1,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 2000,
+            "admitted": 0,
+            "connection_gets": 2000,
+            "connections_idle": 1969,
+            "connections_reused": 1969,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.733222,
+          "first_byte_p95_ms": 3.056974,
+          "first_text_p50_ms": 4.61211,
+          "first_text_p95_ms": 6.433982,
+          "completion_p50_ms": 10.391769,
+          "completion_p95_ms": 13.322305,
+          "client_reuse_fraction": 0.9845,
+          "scheduling_delay_p95_ms": 0.0005400000000008731
+        },
+        {
+          "repeat": 2,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 2000,
+            "admitted": 0,
+            "connection_gets": 2000,
+            "connections_idle": 1999,
+            "connections_reused": 1999,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.698688,
+          "first_byte_p95_ms": 3.261511,
+          "first_text_p50_ms": 4.564119,
+          "first_text_p95_ms": 6.243696,
+          "completion_p50_ms": 10.27651,
+          "completion_p95_ms": 12.882068,
+          "client_reuse_fraction": 0.9995,
+          "scheduling_delay_p95_ms": 0.0005500000000040473
+        },
+        {
+          "repeat": 3,
+          "counts": {
+            "admission_false": 0,
+            "admission_unknown": 2000,
+            "admitted": 0,
+            "connection_gets": 2000,
+            "connections_idle": 2000,
+            "connections_reused": 2000,
+            "dispatched": 2000,
+            "dropped": 0,
+            "failed": 0,
+            "gateway_rejected": 0,
+            "missing_records": 0,
+            "objective_met": 2000,
+            "offered": 2000,
+            "output_length_deviation": 2000,
+            "rejected": 0,
+            "success": 2000,
+            "upstream_429": 0,
+            "usage_present": 2000
+          },
+          "first_byte_p50_ms": 1.696534,
+          "first_byte_p95_ms": 3.147508,
+          "first_text_p50_ms": 4.566004,
+          "first_text_p95_ms": 6.342695,
+          "completion_p50_ms": 10.157945,
+          "completion_p95_ms": 13.00786,
+          "client_reuse_fraction": 1,
+          "scheduling_delay_p95_ms": 0.0005499999999756255
+        }
+      ],
+      "aggregate": {
+        "first_byte_p50_ms": {
+          "median": 1.698688,
+          "min": 1.696534,
+          "max": 1.733222
+        },
+        "first_byte_p95_ms": {
+          "median": 3.147508,
+          "min": 3.056974,
+          "max": 3.261511
+        },
+        "first_text_p50_ms": {
+          "median": 4.566004,
+          "min": 4.564119,
+          "max": 4.61211
+        },
+        "first_text_p95_ms": {
+          "median": 6.342695,
+          "min": 6.243696,
+          "max": 6.433982
+        },
+        "completion_p95_ms": {
+          "median": 13.00786,
+          "min": 12.882068,
+          "max": 13.322305
+        }
+      }
+    }
+  ],
+  "cgroup_cpu_max": "max 100000"
+}

@@ -19,9 +19,9 @@ or measurement contract, including their rationale, before comparing results.
 
 ## Code map
 
-- `cmd/lab` contains the CLI entry point. Currently it implements `smoke`;
-  benchmark commands are planned for Phase 3. `internal/smoke` implements
-  the smoke client.
+- `cmd/lab` contains the `smoke`, `prepare`, `bench` and `summarize` CLI entry
+  points. `internal/smoke` implements the smoke client; `internal/bench` owns
+  benchmark scheduling, records, persistence and offline summaries.
 - `cmd/mockllm` and `internal/mockllm` contain the simulated inference server.
 - `cmd/gateway` and `internal/gateway` contain the gateway.
 - `internal/sse` contains SSE framing and decoding. `internal/stream` contains

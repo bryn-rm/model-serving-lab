@@ -14,8 +14,18 @@ import (
 
 func main() { os.Exit(run()) }
 func run() int {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "bench":
+			return runBench(os.Args[2:])
+		case "prepare":
+			return runPrepare(os.Args[2:])
+		case "summarize":
+			return runSummarize(os.Args[2:])
+		}
+	}
 	if len(os.Args) < 2 || os.Args[1] != "smoke" {
-		fmt.Fprintln(os.Stderr, "usage: lab smoke [--url URL] [--output measurement.json]")
+		fmt.Fprintln(os.Stderr, "usage: lab {smoke|prepare|bench|summarize} [flags]")
 		return 2
 	}
 	o := smoke.Defaults()

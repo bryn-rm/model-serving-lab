@@ -39,3 +39,6 @@ go.work.sum
 /bin/
 /results/
 /measurement.json
+
+# Local review notes
+/PHASE3_REVIEW.tmp.md

@@ -1,6 +1,7 @@
 # Predictions to test
 
-No performance conclusions have been drawn from synthetic replay.
+Synthetic E1 replay results are recorded in [e1-mock.md](e1-mock.md).
+They describe harness overhead and variability, not GPU performance.
 
 | Question | Prediction |
 | --- | --- |
@@ -11,3 +12,11 @@ No performance conclusions have been drawn from synthetic replay.
 | Q5: admission | Some caps may preserve admitted latency through fast rejection; overly small caps may reduce goodput. |
 
 Record disagreements with measurements. GPU pilot, frozen controls, final runs and charts are pending.
+
+
+E1 mock observations: the difference in median first-text p50 between arms was
+0.427 ms at concurrency 1 and 1.729 ms at concurrency 32. Concurrent gateway
+first-text p95 varied substantially across repeats (18.110–20.329 ms). The
+small-overhead prediction describes the serial median more closely than the
+concurrent tail. Three repeats, 2,000 attempts each, succeeded in all four
+conditions. All usage and timings remain synthetic; GPU confirmation is pending.

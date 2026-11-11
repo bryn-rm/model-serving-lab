@@ -1,64 +1,81 @@
-# Build status — 10 November 2026
+# Build status — 11 November 2026
 
 ## Completed
-- **Phase 0 (CPU fallback), Phase 1 and Phase 2 complete.** Go 1.27.3;
-  one direct dependency, `github.com/prometheus/client_golang v1.25.0`. Fixtures and token counts remain **synthetic**.
-- **Phase 2 gateway** (`cmd/gateway`, `internal/gateway`): bearer auth
-  (`LAB_GATEWAY_API_KEY`) separate from the upstream credential
-  (`LAB_UPSTREAM_API_KEY`); strict whitelist validation (no nulls, integral
-  integers, one output limit ≤ `--max-output-tokens`, text-only messages);
-  original body bytes forwarded unchanged; immediate semaphore admission
-  (`--admission-cap`, 0 disables) with JSON 429 + `Retry-After`; slot held
-  from dispatch to terminal outcome and released by `defer`; early flushed
-  streaming; shared first-text/idle/total deadlines; per-write downstream
-  deadlines; JSON errors before headers, SSE error (no `[DONE]`) after;
-  upstream error events (current and legacy vLLM shapes) forwarded and
-  recorded as failures; no retries; `X-Lab-Request-ID`, validated
-  `X-Request-ID` echo and `X-Lab-Admitted`; JSON logs carry body length and
-  SHA-256, never keys or prompts; admin listener `:8081` serves `/healthz`,
-  `/readyz` (upstream `/health` + drain state) and `/metrics`; bounded
-  shutdown (grace, then SSE `shutdown` error, ≤ grace + write timeout + 1s).
-- **Shared code:** `internal/stream` now holds deadlines, event inspection and
-  the transport, used by both `lab smoke` and the gateway. Phase 1 tests pass
-  unchanged, so the Phase 1 review fixes are preserved. The gateway transport
-  sets no per-host connection cap (admission is the only limiter) and keeps
-  512 idle connections (`--upstream-idle-conns`).
-- The mock now also serves `/health` and enforces `LAB_UPSTREAM_API_KEY` when set.
+- **Phases 0 (CPU fallback), 1, 2 and 3 complete.** Go 1.27.3; the only
+  direct dependency remains the Prometheus Go client. Fixtures, usage counts
+  and all current benchmark timings are **synthetic**.
+- Gateway auth, strict byte-preserving validation, immediate admission,
+  deadlines, cancellation, bounded shutdown and private admin metrics remain
+  covered by the Phase 2 suite. Its review fixes (duplicate keys, terminal
+  capacity release, empty errors and upstream configuration) are preserved.
+- **Phase 3:** `lab prepare`, `lab bench` (closed/open, JSON `--config`
+  plus flag overrides), `lab summarize`;
+  saved exact request bodies/hashes and arrival schedules; fixed workers,
+  bounded in-flight work, explicit drops/dispatch lag, per-request deadlines,
+  interruption and bounded draining, no inference retries.
+- Unique run directories save manifests, workload/schedule snapshots,
+  per-repeat identities, synced JSONL observations, separate warm-up records,
+  summaries and metric capture/status evidence. Disk errors stop the run;
+  partial evidence remains readable. Credentials are environment-only.
+- Offline summaries retain failed text timings, distinguish gateway rejection
+  from admitted upstream 429, account for missing/unknown records, use
+  nearest-rank success-only and infinity-penalised populations, and report
+  scheduled-arrival goodput, rates, usage/output lengths and repeat spread.
+  The contract and rationale are in `docs/benchmark-contract.md`.
 
-## Phase 2 review alterations (10 Nov)
-- Release admission immediately after forwarding `[DONE]`; an upstream that
-  keeps its response open can no longer retain a slot until a deadline.
-  Connections already read through EOF remain reusable; otherwise the body
-  is closed rather than blocking terminal completion to drain it.
-- Reject duplicate JSON keys, including nested and escaped duplicate keys,
-  before dispatch. Validated request bytes are still forwarded unchanged.
-- Treat `event: error` with empty data as a failure in the shared inspector
-  used by the gateway and smoke client.
-- Reject upstream URLs containing credentials, queries or fragments and
-  malformed readiness paths at startup, preventing ambiguous routing,
-  credential logging and readiness-handler failures.
-- Correct README dependency guidance: the gateway requires the pinned
-  Prometheus Go client and its transitive dependencies.
-- Add regression coverage for terminal streams without EOF, duplicate-key
-  rejection before dispatch, invalid configuration and empty error events.
+## Phase 3 review fixes (11 November)
+- **Drain default now tracks the total request deadline** (`--drain 0`,
+  resolved into the manifest). The old 10 s default would cut late open-loop
+  arrivals as `drain_timeout` long before their 120/300 s deadlines, biasing
+  overload results by arrival position. A first signal drains; a second
+  aborts (synced records remain summarisable). Rationale recorded in
+  `docs/benchmark-contract.md`; E1 (closed loop) is unaffected.
+- Generator idle pool is `max(512, max-inflight)`; the manifest records the
+  transport's actual settings instead of duplicated constants.
+- Summaries add `gateway_rejection_rate` and `upstream_429_rate` alongside the
+  combined `rejection_rate` (E5 needs the gateway-only 429 fraction).
+- Summary `synthetic` is also set by any `X-Lab-Synthetic` response evidence.
+- Regression tests added for each fix.
 
-## Review verification (10 Nov)
-- `make check`: pass (formatting, vet and `go test -race ./...`). The initial
-  sandbox run could not open local TCP test listeners; the full check passed
-  when rerun with the required access.
-- Focused gateway tests, `make build` and `git diff --check`: pass.
-- Existing tests cover auth, body parity, early streaming, overload/recovery,
-  cancellation, deadlines, failure-path slot release, stalled clients,
-  readiness/metrics and bounded shutdown. New regression tests also pass.
-- Docker and native smoke/SIGTERM demos were reported passing by the original
-  implementer; they were not repeated in this review.
+## Verification
+- 11 Nov review: `make check`, `make build`, `git diff --check` pass;
+  `go test -race -count=10 ./internal/bench ./cmd/lab` pass;
+  `scripts/demo-bench.sh` pass; native SIGTERM drain/abort check pass
+  (manifest left `running`, in-flight attempts counted as missing failures).
+  Second-signal abort cannot work for SIGINT when the process inherits SIGINT
+  as ignored (e.g. a background job in a non-interactive script); use SIGTERM.
+  E1 was not rerun (its closed-loop results do not depend on these fixes).
+- 10 Nov (Phase 3 build): `make check`: pass (formatting, vet, all race tests); `make build`: pass;
+  `git diff --check`: pass. HTTP tests need local-listener access, which the
+  initial sandbox run blocked; the authorised rerun passed.
+- Repeated `go test -race -count=10 ./internal/bench ./cmd/lab`: pass using the
+  Makefile's Clang/CGO/cache settings. Tests cover accounting, concurrency,
+  drops/lag, post-text failures, all deadlines, 429 admission, EOF/reuse,
+  bounded draining, interrupted/missing/torn records, infinity, disk errors,
+  config precedence and disabled transport replay.
+- Native `scripts/demo-bench.sh`: pass for both modes and offline summaries.
+  `docs/benchmarking.md` contains usage and copy-pasteable script commands.
+- **E1 mock:** 2,000 attempts × three repeats × direct/gateway × concurrency
+  1/32 = 24,000 successes; identical bodies and matched client transports.
+  Offline and end-of-run summaries agree. Raw evidence:
+  `results/e1-phase3-final/` (ignored); repository extract/report:
+  `docs/e1-mock-summary.json`, `docs/e1-mock.md`.
+- E1 median first-text p50 differences: +0.427 ms at concurrency 1, +1.729 ms
+  at 32. Gateway concurrency-32 repeat p95s varied 18.110–20.329 ms; client
+  connection reuse was 97.75–98.85%. CPU and upstream reuse are in the report.
+  Six invented output tokens differ from the requested 128 in every replay.
+  These results describe CPU harness behaviour, not real-engine capacity.
+- Docker was not rerun: deployment files were unchanged in Phase 3.
 
-## Pending GPU access
-Real sanitized stream captures (including vLLM's real mid-stream error
-shape), headers, `/metrics`, startup evidence, vLLM v0.33.0 image digest and
-compatibility, model/tokenizer revisions. `configs/environment.json` holds
-unverified candidate settings. GPU Compose (`make gpu-up`) is not written.
+## Pending live checks and next action
+Commit Phase 3, then optionally rerun `scripts/run-e1.py` from the clean
+commit so E1 manifests record `git_dirty=false` (the current extract is from
+a dirty tree). Phase 4 workload prep still needs calibrated multi-prompt
+buckets (E3) and shared/unique-prefix workloads (E4); `lab prepare` currently
+emits one constant-rate prompt.
 
-## Next action
-Phase 3: `lab bench` (closed/open-loop), per-attempt JSONL, manifest,
-failure-aware summaries, then E1 on the mock.
+Phase 4 requires authorised GPU access: real sanitised streams/error shapes,
+headers, native metrics, image digest/compatibility, model/tokenizer revisions,
+GPU deployment, output-length calibration and the GPU E1 confirmation. Freeze
+resolved scheduler/cache controls after the pilot before E2–E5. Candidate
+settings in `configs/environment.json` remain unverified. No GPU spend incurred.
