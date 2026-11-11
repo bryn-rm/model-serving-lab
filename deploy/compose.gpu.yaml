@@ -1,0 +1,82 @@
+# GPU stack: vLLM (host loopback 8000) and the Go gateway (loopback 8080,
+# private admin 8081). The gateway reaches vLLM over the Compose network.
+# Requires Docker Compose v2 and the NVIDIA Container Toolkit.
+#
+#   docker compose --env-file configs/gpu-pilot.env -f deploy/compose.gpu.yaml up -d --build
+#
+# Credentials are read from the shell environment only. Do not save the
+# output of `docker compose config`: it expands them.
+name: model-serving-lab-gpu
+services:
+  vllm:
+    image: ${VLLM_IMAGE_REPO:?}@${VLLM_IMAGE_DIGEST:?run scripts/gpu-preflight.sh --write to pin the image digest}
+    entrypoint: ["vllm", "serve"]
+    command:
+      - ${MODEL_ID:?}
+      - --revision=${MODEL_REVISION:?run scripts/gpu-preflight.sh --write to pin the model revision}
+      - --tokenizer-revision=${MODEL_REVISION:?}
+      - --served-model-name=${SERVED_MODEL_NAME:?}
+      - --dtype=${DTYPE:?}
+      - --kv-cache-dtype=${KV_CACHE_DTYPE:?}
+      - --max-model-len=${MAX_MODEL_LEN:?}
+      - --gpu-memory-utilization=${GPU_MEMORY_UTILIZATION:?}
+      - --max-num-seqs=${MAX_NUM_SEQS:?}
+      - --max-num-batched-tokens=${MAX_NUM_BATCHED_TOKENS:?}
+      - ${CHUNKED_PREFILL_FLAG:?}
+      - ${PREFIX_CACHING_FLAG:?}
+      - --generation-config=${GENERATION_CONFIG:?}
+      - --host=0.0.0.0
+      - --port=8000
+    environment:
+      # vLLM reads its API key from the environment, keeping it out of argv.
+      VLLM_API_KEY: ${LAB_UPSTREAM_API_KEY:?set LAB_UPSTREAM_API_KEY}
+      HF_TOKEN: ${HF_TOKEN:-}
+      VLLM_NO_USAGE_STATS: "1"
+      DO_NOT_TRACK: "1"
+    volumes:
+      - ${HF_CACHE_DIR:-${HOME}/.cache/huggingface}:/root/.cache/huggingface
+    ipc: host
+    ports:
+      - "127.0.0.1:8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      # First start downloads ~15 GB of weights and compiles CUDA graphs.
+      start_period: 30m
+    stop_grace_period: 30s
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.cpu
+    image: model-serving-lab-gateway:local
+    entrypoint: ["/gateway"]
+    command:
+      - --addr=0.0.0.0:8080
+      - --admin-addr=0.0.0.0:8081
+      - --upstream=http://vllm:8000
+      - --model=${SERVED_MODEL_NAME:?}
+      - --admission-cap=${LAB_ADMISSION_CAP:?}
+      - --first-text-timeout=${GATEWAY_FIRST_TEXT_TIMEOUT:?}
+      - --idle-timeout=${GATEWAY_IDLE_TIMEOUT:?}
+      - --timeout=${GATEWAY_TOTAL_TIMEOUT:?}
+      - --max-output-tokens=${GATEWAY_MAX_OUTPUT_TOKENS:?}
+    environment:
+      LAB_GATEWAY_API_KEY: ${LAB_GATEWAY_API_KEY:?set LAB_GATEWAY_API_KEY}
+      LAB_UPSTREAM_API_KEY: ${LAB_UPSTREAM_API_KEY:?set LAB_UPSTREAM_API_KEY}
+    # Readiness (/readyz on 8081) reports the upstream health, so the gateway
+    # can start before vLLM finishes loading.
+    depends_on: [vllm]
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+    stop_grace_period: 15s

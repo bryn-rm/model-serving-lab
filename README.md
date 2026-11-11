@@ -51,13 +51,16 @@ LAB_API_KEY=$LAB_GATEWAY_API_KEY ./bin/lab smoke --url http://127.0.0.1:8080/v1/
 Optional container path: `make mock-up` / `make mock-down` (Docker Compose;
 mock, gateway and admin ports; requires `LAB_GATEWAY_API_KEY`).
 Use only one server on port 8000 at a time. Local commands are the primary
-Codespaces path. `make gpu-up` reports the unresolved GPU prerequisites.
+Codespaces path. The GPU stack (`make gpu-up` / `make gpu-down`, vLLM serving
+Qwen2.5-7B-Instruct as `lab-model`) follows [gpu-runbook.md](docs/gpu-runbook.md);
+`make gpu-config-check` validates its configuration without a GPU.
 
 Layout: `cmd/` entry points, `internal/` protocol/client/replay code,
 `testdata/streams/` synthetic fixtures and provenance, `configs/` environment
-pins, `deploy/` CPU container setup, `docs/` experiment hypotheses and results.
-Phase 3 includes closed/open-loop benchmarks and offline summaries. GPU
-deployment and real-engine experiments belong to Phase 4.
+pins (`gpu-pilot.env` for the GPU stack), `deploy/` CPU and GPU Compose files,
+`scripts/` demo, E1 and GPU-session helpers, `docs/` runbooks, hypotheses and
+results. Phase 3 includes closed/open-loop benchmarks and offline summaries.
+Phase 4 GPU deployment is prepared; no real-engine run has happened yet.
 See [BUILD_STATUS.md](BUILD_STATUS.md) for verification and pending work.
 
 

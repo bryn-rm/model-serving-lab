@@ -2,80 +2,100 @@
 
 ## Completed
 - **Phases 0 (CPU fallback), 1, 2 and 3 complete.** Go 1.27.3; the only
-  direct dependency remains the Prometheus Go client. Fixtures, usage counts
+  direct Go dependency remains the Prometheus client. Fixtures, usage counts
   and all current benchmark timings are **synthetic**.
-- Gateway auth, strict byte-preserving validation, immediate admission,
-  deadlines, cancellation, bounded shutdown and private admin metrics remain
-  covered by the Phase 2 suite. Its review fixes (duplicate keys, terminal
-  capacity release, empty errors and upstream configuration) are preserved.
-- **Phase 3:** `lab prepare`, `lab bench` (closed/open, JSON `--config`
-  plus flag overrides), `lab summarize`;
-  saved exact request bodies/hashes and arrival schedules; fixed workers,
-  bounded in-flight work, explicit drops/dispatch lag, per-request deadlines,
-  interruption and bounded draining, no inference retries.
-- Unique run directories save manifests, workload/schedule snapshots,
-  per-repeat identities, synced JSONL observations, separate warm-up records,
-  summaries and metric capture/status evidence. Disk errors stop the run;
-  partial evidence remains readable. Credentials are environment-only.
-- Offline summaries retain failed text timings, distinguish gateway rejection
-  from admitted upstream 429, account for missing/unknown records, use
-  nearest-rank success-only and infinity-penalised populations, and report
-  scheduled-arrival goodput, rates, usage/output lengths and repeat spread.
-  The contract and rationale are in `docs/benchmark-contract.md`.
+- Gateway: auth, strict byte-preserving validation, immediate admission,
+  deadlines, cancellation, bounded shutdown, private admin metrics.
+- Phase 3: `lab prepare`, `lab bench` (closed/open, `--config` plus flag
+  overrides), `lab summarize`. The contract is in `docs/benchmark-contract.md`.
+  - Saved body bytes and schedules; per-attempt records, including drops and
+    dispatch lag; bounded draining. The drain defaults to the total deadline.
+  - Failure-aware nearest-rank summaries with infinity penalties, separate
+    gateway/upstream-429 rates and scheduled-arrival goodput.
+  - Review fixes (drain censoring, idle pool sizing, rejection rates,
+    synthetic evidence) are covered by regression tests.
+- **Phase 4 preparation (no GPU used yet):**
+  - `deploy/compose.gpu.yaml` runs vLLM (`vllm serve`, image pinned by
+    digest) serving Qwen/Qwen2.5-7B-Instruct as `lab-model`. Settings come
+    from the plan defaults: 4,096 context, `dtype auto`, 0.90 memory, 64 seqs,
+    4,096 batched tokens, chunked prefill on, prefix caching off,
+    `--generation-config vllm`, and the model/tokenizer revision pinned.
+  - The gateway runs with cap 0 (disabled), 120/120/300 s deadlines and
+    loopback-only ports 8000/8080/8081.
+  - Credentials are environment-only; vLLM takes `VLLM_API_KEY`.
+  - Pins and settings live in `configs/gpu-pilot.env`. Empty digest/revision
+    pins make Compose refuse to start.
+  - `scripts/gpu-preflight.sh` checks:
+    - host tools and the GPU;
+    - an in-container torch BF16 matmul with `--gpus all`;
+    - support for every serve flag in the pinned release.
 
-## Phase 3 review fixes (11 November)
-- **Drain default now tracks the total request deadline** (`--drain 0`,
-  resolved into the manifest). The old 10 s default would cut late open-loop
-  arrivals as `drain_timeout` long before their 120/300 s deadlines, biasing
-  overload results by arrival position. A first signal drains; a second
-  aborts (synced records remain summarisable). Rationale recorded in
-  `docs/benchmark-contract.md`; E1 (closed loop) is unaffected.
-- Generator idle pool is `max(512, max-inflight)`; the manifest records the
-  transport's actual settings instead of duplicated constants.
-- Summaries add `gateway_rejection_rate` and `upstream_429_rate` alongside the
-  combined `rejection_rate` (E5 needs the gateway-only 429 fraction).
-- Summary `synthetic` is also set by any `X-Lab-Synthetic` response evidence.
-- Regression tests added for each fix.
+    It also resolves and pins the registry digest, the HF revision (checking
+    tokenizer/config files) and the prefix-cache flag spelling.
+  - `scripts/gpu_environment.py` snapshots pins plus running-stack evidence
+    (image digest, GPU/driver, `/v1/models`, `vllm:cache_config_info`) for
+    `lab bench --environment`. It fails when the stack contradicts the pins.
+  - `scripts/gpu-capture.sh` sends identical body bytes to both paths.
+    - It verifies `[DONE]`, usage, 128 completion tokens, matched usage and
+      gateway body-SHA parity.
+    - It captures 401/404/400 envelopes (direct and relayed), metrics,
+      `/version` and `/v1/models`.
+    - It sanitises (IDs, timestamps, volatile headers) after a secret scan.
+  - `scripts/gpu-cancel-check.sh` disconnects mid-stream on both paths. It
+    requires the engine gauges and the gateway in-flight gauge to return to
+    zero and records the gateway outcome.
+  - `scripts/pilot_table.py` tabulates runs and suggests an open-loop rate
+    (1.25 × best healthy closed-loop throughput).
+  - `make gpu-up/gpu-down/gpu-config-check/lab-docker`. The procedure is in
+    `docs/gpu-runbook.md`.
 
-## Verification
-- 11 Nov review: `make check`, `make build`, `git diff --check` pass;
-  `go test -race -count=10 ./internal/bench ./cmd/lab` pass;
-  `scripts/demo-bench.sh` pass; native SIGTERM drain/abort check pass
-  (manifest left `running`, in-flight attempts counted as missing failures).
-  Second-signal abort cannot work for SIGINT when the process inherits SIGINT
-  as ignored (e.g. a background job in a non-interactive script); use SIGTERM.
-  E1 was not rerun (its closed-loop results do not depend on these fixes).
-- 10 Nov (Phase 3 build): `make check`: pass (formatting, vet, all race tests); `make build`: pass;
-  `git diff --check`: pass. HTTP tests need local-listener access, which the
-  initial sandbox run blocked; the authorised rerun passed.
-- Repeated `go test -race -count=10 ./internal/bench ./cmd/lab`: pass using the
-  Makefile's Clang/CGO/cache settings. Tests cover accounting, concurrency,
-  drops/lag, post-text failures, all deadlines, 429 admission, EOF/reuse,
-  bounded draining, interrupted/missing/torn records, infinity, disk errors,
-  config precedence and disabled transport replay.
-- Native `scripts/demo-bench.sh`: pass for both modes and offline summaries.
-  `docs/benchmarking.md` contains usage and copy-pasteable script commands.
-- **E1 mock:** 2,000 attempts × three repeats × direct/gateway × concurrency
-  1/32 = 24,000 successes; identical bodies and matched client transports.
-  Offline and end-of-run summaries agree. Raw evidence:
-  `results/e1-phase3-final/` (ignored); repository extract/report:
-  `docs/e1-mock-summary.json`, `docs/e1-mock.md`.
-- E1 median first-text p50 differences: +0.427 ms at concurrency 1, +1.729 ms
-  at 32. Gateway concurrency-32 repeat p95s varied 18.110–20.329 ms; client
-  connection reuse was 97.75–98.85%. CPU and upstream reuse are in the report.
-  Six invented output tokens differ from the requested 128 in every replay.
-  These results describe CPU harness behaviour, not real-engine capacity.
-- Docker was not rerun: deployment files were unchanged in Phase 3.
+## Phase 4 review fixes
+- Confirmed all three review findings with synthetic regression cases.
+- Environment snapshots now require runtime evidence and compare both running
+  containers' entrypoints/arguments with the declared condition. Missing data,
+  stale revisions/settings and extra flags fail; raw argv/env are not saved.
+- Gateway admission is checked against its metric. `--admission-cap` declares
+  an override explicitly, preventing cap-8 runs from being labelled cap-0.
+- Config checks allow positive sequence/batch limits and memory utilisation in
+  (0, 1], requiring consistency with `scheduler_candidate`. The runbook records
+  adjustments and reloads shell exports before restarting.
+- These checks protect measurement labels; they do not establish real-engine
+  behaviour. No GPU run or result comparison was performed.
 
-## Pending live checks and next action
-Commit Phase 3, then optionally rerun `scripts/run-e1.py` from the clean
-commit so E1 manifests record `git_dirty=false` (the current extract is from
-a dirty tree). Phase 4 workload prep still needs calibrated multi-prompt
-buckets (E3) and shared/unique-prefix workloads (E4); `lab prepare` currently
-emits one constant-rate prompt.
+## Verification (11 November)
+- Passed: `make check`, `make build`, `git diff --check`,
+  `make gpu-config-check` (15 Python tests, the compose render, resolved-setting and
+  `configs/environment.json` consistency).
+- Negative config checks pass. A mutated compose file (public port, drifted
+  `max-num-seqs`, literal key) is rejected, and empty pins are refused.
+- `make lab-docker` built a static `bin/lab` in `golang:1.27.3`.
+- Offline rehearsal used a throwaway **fake** vLLM plus the real gateway
+  binary. These are script-logic checks only, with no engine behaviour:
+  - `gpu-capture.sh`: all checks pass;
+  - `gpu-cancel-check.sh`: PASS (outcome `client_canceled`);
+  - runbook steps 10–11 (closed sweep, gateway spot check, rate suggestion,
+    same-body check, open loop on both arms, metric captures, pilot table);
+  - session secret scan: clean.
+- Earlier Phase 3: repeated race tests, native demo, signal drain/abort, and
+  synthetic E1 (`docs/e1-mock.md`; 24,000 successes; first-text p50 +0.427 ms
+  at concurrency 1 and +1.729 ms at 32). E1 extract is from a dirty tree.
 
-Phase 4 requires authorised GPU access: real sanitised streams/error shapes,
-headers, native metrics, image digest/compatibility, model/tokenizer revisions,
-GPU deployment, output-length calibration and the GPU E1 confirmation. Freeze
-resolved scheduler/cache controls after the pilot before E2–E5. Candidate
-settings in `configs/environment.json` remain unverified. No GPU spend incurred.
+## Pending live checks (need authorised GPU access)
+- Host/toolkit compatibility of `vllm/vllm-openai:v0.33.0` (CUDA 13 default).
+  Substitute a documented compatible image if needed and record why, once.
+- Pin and commit `VLLM_IMAGE_DIGEST` and `MODEL_REVISION`, and confirm the
+  pinned release's flag spellings, including for prefix caching.
+- 7B memory fit at the plan defaults. Record any adjustment, then freeze.
+- Engine-reported settings match the pins (`gpu_environment.py`).
+- Real streams: usage/128-token length on both paths, body parity, real error
+  envelopes, real `/metrics` names; sanitised fixtures in `testdata/`.
+- Engine release on client cancellation (direct and gateway).
+- Closed-loop sweep and 60 s open-loop pilot. Then freeze the rate, the
+  objective and the engine settings before E2–E5; GPU E1 confirmation; native
+  benchmark cross-check.
+
+## Next action
+Commit Phase 4 prep, then run `docs/gpu-runbook.md` on the GPU host. Record
+GPU type, session hours and spend here afterwards. Still to build after the
+pilot: calibrated prompt buckets (E3), prefix workloads (E4) and
+Prometheus/Grafana.

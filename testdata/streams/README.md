@@ -12,3 +12,5 @@ authorised GPU session capture sanitized successful, usage and error streams,
 response headers, raw `/metrics`, startup settings, model/tokenizer revision,
 image tag/digest, GPU/driver and capture commands. Keep real captures and their
 provenance distinct from these files. No real metric scrape exists yet.
+`scripts/gpu-capture.sh` produces sanitised captures; docs/gpu-runbook.md step 12
+copies reviewed ones to `testdata/streams/vllm-<tag>/` with their provenance.

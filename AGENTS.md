@@ -26,8 +26,13 @@ or measurement contract, including their rationale, before comparing results.
 - `cmd/gateway` and `internal/gateway` contain the gateway.
 - `internal/sse` contains SSE framing and decoding. `internal/stream` contains
   shared event inspection, transport and deadline behaviour.
-- `deploy/` contains container configuration. `configs/` contains experiment
-  settings.
+- `deploy/` contains container configuration (`compose.gpu.yaml` for vLLM plus
+  gateway). `configs/` contains experiment settings; `configs/gpu-pilot.env`
+  holds the GPU pins and engine flags.
+- `scripts/` contains the CPU demo/E1 runners and GPU-session helpers
+  (preflight, environment snapshot, capture/sanitise, cancellation, pilot
+  table), tested by `make gpu-config-check`. `docs/gpu-runbook.md` is the GPU
+  session procedure.
 - `testdata/` contains fixtures. `docs/` contains explanations and experiment
   reports.
 

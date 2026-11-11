@@ -2,6 +2,7 @@
   "go_toolchain": "go1.27.3",
   "c_compiler": "clang 18.1.3",
   "development_path": "CPU-only Codespaces; synthetic replay",
+  "gpu_pin_file": "configs/gpu-pilot.env (authoritative GPU pins; preflight fills digest/revision)",
   "vllm_candidate_tag": "v0.33.0",
   "vllm_image_digest": null,
   "gpu_compatibility": "pending",

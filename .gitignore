@@ -42,3 +42,7 @@ go.work.sum
 
 # Local review notes
 /PHASE3_REVIEW.tmp.md
+/PHASE4_IMPLEMENTATION.tmp.md
+
+# Python bytecode from script tests
+__pycache__/
