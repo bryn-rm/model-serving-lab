@@ -174,6 +174,8 @@ type record struct {
 	bodyBytes      int
 	bodySHA256     string
 	errMsg         string
+	// Structured fields of an upstream error (SSE event or HTTP envelope).
+	upstreamErrType, upstreamErrCode string
 }
 
 var clientIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
@@ -372,8 +374,11 @@ func (g *Gateway) forward(w http.ResponseWriter, rc *http.ResponseController, r 
 			rec.firstText = time.Since(rec.start)
 			watch.Text()
 		}
-		if chunk.Error != "" {
-			upstreamFailed = true // forwarded below; terminal status stays failure
+		if chunk.Error != "" && !upstreamFailed {
+			// Forwarded below; terminal status stays failure. Log only the
+			// structured type/code of the first error, never its message.
+			upstreamFailed = true
+			rec.upstreamErrType, rec.upstreamErrCode = chunk.ErrorInfo.Type, chunk.ErrorInfo.Code
 		}
 		encoded := event.Encode()
 		if err := g.writeDeadline(rc, func() error {
@@ -426,6 +431,8 @@ func (g *Gateway) relayUpstreamError(w http.ResponseWriter, rc *http.ResponseCon
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 	code := resp.StatusCode
+	info := stream.EnvelopeInfo(b)
+	rec.upstreamErrType, rec.upstreamErrCode = info.Type, info.Code
 	w.Header().Set("X-Lab-Upstream-Status", strconv.Itoa(code))
 	if code >= 400 && code < 500 && code != http.StatusUnauthorized && code != http.StatusForbidden && json.Valid(b) {
 		if v := resp.Header.Get("Retry-After"); v != "" {
@@ -496,6 +503,9 @@ func (g *Gateway) finish(rec *record) {
 			rec.errMsg = rec.outcome
 		}
 		attrs = append(attrs, "error", rec.errMsg)
+		if rec.upstreamErrType != "" || rec.upstreamErrCode != "" {
+			attrs = append(attrs, "upstream_error_type", rec.upstreamErrType, "upstream_error_code", rec.upstreamErrCode)
+		}
 	}
 	g.log.Log(context.Background(), level, "request finished", attrs...)
 }

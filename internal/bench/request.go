@@ -120,10 +120,11 @@ func execute(parent context.Context, client *http.Client, c Config, p Prompt, r 
 
 	// Cleanup is independent of terminal outcome: status/error evidence must not
 	// become a first-text timeout merely because a response never sends EOF.
-	drainResponse := func() {
+	drainResponse := func() []byte {
 		timer := time.AfterFunc(5*time.Millisecond, requestCancel)
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		timer.Stop()
+		return b
 	}
 	watch.StartIdle()
 	reader := watch.Reader(resp.Body)
@@ -137,7 +138,9 @@ func execute(parent context.Context, client *http.Client, c Config, p Prompt, r 
 			}
 		}
 		r.FinishedMS = ptr(elapsed())
-		drainResponse()
+		// Only structured type/code fields are kept, never the message.
+		info := stream.EnvelopeInfo(drainResponse())
+		r.ServerErrorType, r.ServerErrorCode = info.Type, info.Code
 		return
 	}
 	media, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
@@ -162,6 +165,7 @@ func execute(parent context.Context, client *http.Client, c Config, p Prompt, r 
 		}
 		if chunk.Error != "" {
 			r.ErrorCode = "sse_error"
+			r.ServerErrorType, r.ServerErrorCode = chunk.ErrorInfo.Type, chunk.ErrorInfo.Code
 			r.FinishedMS = ptr(elapsed())
 			drainResponse()
 			return

@@ -1,4 +1,4 @@
-# Build status — 11 November 2026
+# Build status — 18 November 2026
 
 ## Completed
 - **Phases 0 (CPU fallback), 1, 2 and 3 complete.** Go 1.27.3; the only
@@ -62,6 +62,20 @@
 - These checks protect measurement labels; they do not establish real-engine
   behaviour. No GPU run or result comparison was performed.
 
+## Pre-GPU review fixes (18 November)
+- `scripts/gpu_environment.py` writes `--output` only for a consistent
+  snapshot. On failure it removes any stale snapshot and saves
+  `<output>.rejected.json`. `lab bench` refuses an environment whose
+  `consistency_mismatches` list is nonempty.
+- `lab bench --gateway-metrics-url` scrapes gateway admin metrics before and
+  after each repeat (`repeat-N-*.gateway.prom`). Captures record their `source`.
+- Error records keep only `server_error_type`/`server_error_code` from HTTP or
+  SSE error envelopes (current/legacy vLLM, gateway). The gateway log adds
+  `upstream_error_type`/`upstream_error_code`. Messages are never saved.
+- Runbook: the GPU host works on a `gpu-pilot` branch and pushes the pin
+  commit. Gateway runs pass `--gateway-metrics-url`.
+- CI also runs `make gpu-config-check`.
+
 ## Verification (11 November)
 - Passed: `make check`, `make build`, `git diff --check`,
   `make gpu-config-check` (15 Python tests, the compose render, resolved-setting and
@@ -95,7 +109,10 @@
   benchmark cross-check.
 
 ## Next action
-Commit Phase 4 prep, then run `docs/gpu-runbook.md` on the GPU host. Record
-GPU type, session hours and spend here afterwards. Still to build after the
-pilot: calibrated prompt buckets (E3), prefix workloads (E4) and
-Prometheus/Grafana.
+Phase 4 prep is committed (`8026503`); commit the pre-GPU review fixes, then
+run `docs/gpu-runbook.md` on the GPU host. Watch gateway upstream connection
+reuse in the gateway runs. Record GPU type, session hours and spend here
+afterwards. Still to build after the pilot: shared stream consumption for
+`lab smoke` and `lab bench`, calibrated prompt buckets (E3), a separate
+prefix-caching condition for E4 (the config check currently requires it
+disabled) and Prometheus/Grafana.

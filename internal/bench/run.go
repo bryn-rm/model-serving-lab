@@ -32,9 +32,11 @@ func validate(c Config, w Workload, s Schedule) error {
 	if err := safeURL(c.URL); err != nil {
 		return err
 	}
-	if c.MetricsURL != "" {
-		if err := safeURL(c.MetricsURL); err != nil {
-			return err
+	for _, u := range []string{c.MetricsURL, c.GatewayMetricsURL} {
+		if u != "" {
+			if err := safeURL(u); err != nil {
+				return err
+			}
 		}
 	}
 	if c.Workers < 1 || c.MaxInflight < 1 || c.Workers > c.MaxInflight || c.Attempts < 1 || c.Repeats < 1 || c.Warmup < 0 || c.MaxEventBytes < 1 || c.MaxDuration <= 0 || c.Drain <= 0 || c.ObjectiveMS <= 0 || math.IsNaN(c.ObjectiveMS) || math.IsInf(c.ObjectiveMS, 0) {
@@ -59,6 +61,13 @@ func validate(c Config, w Workload, s Schedule) error {
 	var env map[string]json.RawMessage
 	if json.Unmarshal(c.Environment, &env) != nil || env == nil {
 		return errors.New("environment must be JSON")
+	}
+	// A snapshot that contradicts the running stack must never label a run.
+	if raw, ok := env["consistency_mismatches"]; ok {
+		var mismatches []string
+		if json.Unmarshal(raw, &mismatches) != nil || len(mismatches) > 0 {
+			return errors.New("environment snapshot reports consistency mismatches; fix the stack or re-run scripts/gpu_environment.py")
+		}
 	}
 	if c.Mode == "open" {
 		if s.SchemaVersion != Schema || len(s.Arrivals) == 0 || s.WindowMS <= 0 || math.IsNaN(s.WindowMS) || math.IsInf(s.WindowMS, 0) || s.WindowMS > ms(c.MaxDuration) {
@@ -189,11 +198,11 @@ func Run(ctx context.Context, c Config, w Workload, s Schedule) (dir string, res
 			}
 		}
 		warmCancel()
-		capture, err := captureMetrics(ctx, client, c, dir, fmt.Sprintf("repeat-%d-before.prom", repeat))
+		captures, err := captureAll(ctx, client, c, dir, repeat, "before")
 		if err != nil {
 			return dir, err
 		}
-		m.Captures = append(m.Captures, capture)
+		m.Captures = append(m.Captures, captures...)
 		rep := Repeat{Number: repeat, StartedUTC: time.Now().UTC(), Expected: c.Attempts}
 		if c.Mode == "open" {
 			rep.WindowMS = s.WindowMS
@@ -215,11 +224,11 @@ func Run(ctx context.Context, c Config, w Workload, s Schedule) (dir string, res
 		if err != nil {
 			return dir, err
 		}
-		capture, err = captureMetrics(ctx, client, c, dir, fmt.Sprintf("repeat-%d-after.prom", repeat))
+		captures, err = captureAll(ctx, client, c, dir, repeat, "after")
 		if err != nil {
 			return dir, err
 		}
-		m.Captures = append(m.Captures, capture)
+		m.Captures = append(m.Captures, captures...)
 		if err := save(); err != nil {
 			return dir, err
 		}
@@ -350,14 +359,33 @@ func runRepeat(parent context.Context, client *http.Client, c Config, w Workload
 	return complete.Load(), writeErr
 }
 
-func captureMetrics(ctx context.Context, client *http.Client, c Config, dir, name string) (Capture, error) {
+// captureAll scrapes the primary metrics URL (repeat-N-WHEN.prom, unchanged
+// for earlier runs) and the gateway admin metrics (repeat-N-WHEN.gateway.prom).
+// Each capture records explicit status evidence, including unavailability.
+func captureAll(ctx context.Context, client *http.Client, c Config, dir string, repeat int, when string) ([]Capture, error) {
+	var out []Capture
+	for _, source := range []struct{ name, url, file string }{
+		{"metrics_url", c.MetricsURL, fmt.Sprintf("repeat-%d-%s.prom", repeat, when)},
+		{"gateway_metrics_url", c.GatewayMetricsURL, fmt.Sprintf("repeat-%d-%s.gateway.prom", repeat, when)},
+	} {
+		capture, err := captureMetrics(ctx, client, source.url, dir, source.file)
+		capture.Source = source.name
+		out = append(out, capture)
+		if err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
+func captureMetrics(ctx context.Context, client *http.Client, url, dir, name string) (Capture, error) {
 	cap := Capture{Path: name, Status: "unavailable_no_metrics_url"}
-	if c.MetricsURL == "" {
+	if url == "" {
 		return cap, AtomicJSON(filepath.Join(dir, name+".status.json"), cap)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, c.MetricsURL, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	resp, e := client.Do(req)
 	if e != nil {
 		cap.Status = "unavailable_transport"

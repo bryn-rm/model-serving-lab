@@ -81,7 +81,19 @@ Use `--warmup 0` deliberately when testing failure streams or overload handling.
 
 `--environment FILE` saves supplied experiment settings, including resolved
 engine controls, model/tokenizer revisions and topology. Do not include secrets.
-`--metrics-url URL` saves bounded private metric scrapes before/after repeats.
+A snapshot with a nonempty `consistency_mismatches` list (as written by a
+failed `scripts/gpu_environment.py` check) is refused before any dispatch.
+`--metrics-url URL` saves bounded private metric scrapes before/after repeats
+(`repeat-N-{before,after}.prom`). `--gateway-metrics-url URL` does the same for
+the gateway's private admin metrics (`repeat-N-{before,after}.gateway.prom`).
+Both record a status file and a manifest `metric_captures` entry with its
+`source`, including explicit unavailability when the URL is empty.
+
+Error records keep `server_error_type` and `server_error_code` when the
+target's error envelope (HTTP error body or SSE error event, current or legacy
+vLLM shape, or a gateway error) carries short identifier values. Messages are
+never saved, since they can echo prompt text; free-text values become
+`unrecognised`.
 Credentials are read only from the variable named by `--api-key-env`; they are
 not stored in manifests. Redirects and inference retries stay disabled.
 

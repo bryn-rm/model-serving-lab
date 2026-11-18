@@ -46,8 +46,11 @@ type Config struct {
 	ObjectiveMS   float64          `json:"first_text_objective_ms"`
 	AdmissionCap  *int             `json:"gateway_admission_cap"`
 	MetricsURL    string           `json:"metrics_url"`
-	OutputRoot    string           `json:"-"`
-	Environment   json.RawMessage  `json:"environment"`
+	// GatewayMetricsURL is the gateway's private admin /metrics, scraped
+	// before/after each repeat alongside MetricsURL. Empty records unavailable.
+	GatewayMetricsURL string          `json:"gateway_metrics_url"`
+	OutputRoot        string          `json:"-"`
+	Environment       json.RawMessage `json:"environment"`
 }
 
 func Defaults() Config {
@@ -81,6 +84,8 @@ type Record struct {
 	HTTPStatus            int       `json:"http_status"`
 	UpstreamStatus        int       `json:"upstream_http_status"`
 	ErrorCode             string    `json:"error_code"`
+	ServerErrorType       string    `json:"server_error_type,omitempty"`
+	ServerErrorCode       string    `json:"server_error_code,omitempty"`
 	Outcome               string    `json:"outcome"`
 	Admission             string    `json:"admission"`
 	GatewayRequestID      string    `json:"gateway_request_id"`
@@ -99,6 +104,7 @@ type Repeat struct {
 	Complete    bool       `json:"complete"`
 }
 type Capture struct {
+	Source     string `json:"source"` // metrics_url or gateway_metrics_url
 	Path       string `json:"path"`
 	Status     string `json:"status"`
 	HTTPStatus int    `json:"http_status"`

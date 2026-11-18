@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"model-serving-lab/internal/sse"
@@ -107,11 +109,16 @@ func Reason(ctx context.Context) (string, error) {
 
 type Usage struct{ PromptTokens, CompletionTokens int }
 
+// ErrorInfo holds the structured, low-cardinality fields of an upstream
+// error event. Messages are deliberately excluded: they can echo prompt text.
+type ErrorInfo struct{ Type, Code string }
+
 // Chunk is what the lab needs from one SSE event.
 type Chunk struct {
 	Done         bool
-	Error        string   // nonempty when the event reports an upstream error
-	Text         []string // nonempty content deltas, in choice order
+	Error        string    // nonempty when the event reports an upstream error
+	ErrorInfo    ErrorInfo // structured fields of Error, when present
+	Text         []string  // nonempty content deltas, in choice order
 	FinishReason string
 	Usage        *Usage
 }
@@ -125,7 +132,7 @@ func Inspect(e sse.Event) (Chunk, error) {
 		if message == "" {
 			message = "upstream error event"
 		}
-		return Chunk{Error: message}, nil
+		return Chunk{Error: message, ErrorInfo: errorInfo([]byte(e.Data))}, nil
 	}
 	if e.Data == "[DONE]" {
 		return Chunk{Done: true}, nil
@@ -148,10 +155,10 @@ func Inspect(e sse.Event) (Chunk, error) {
 		return Chunk{}, fmt.Errorf("invalid stream JSON: %w", err)
 	}
 	if len(raw.Error) > 0 && string(raw.Error) != "null" {
-		return Chunk{Error: string(raw.Error)}, nil
+		return Chunk{Error: string(raw.Error), ErrorInfo: errorInfo(raw.Error)}, nil
 	}
 	if raw.Object == "error" {
-		return Chunk{Error: e.Data}, nil
+		return Chunk{Error: e.Data, ErrorInfo: errorInfo([]byte(e.Data))}, nil
 	}
 	var c Chunk
 	if raw.Usage != nil {
@@ -166,6 +173,59 @@ func Inspect(e sse.Event) (Chunk, error) {
 		}
 	}
 	return c, nil
+}
+
+// EnvelopeInfo extracts ErrorInfo from an HTTP error body in either the
+// current ({"error":{...}}) or legacy (top-level fields) vLLM shape.
+func EnvelopeInfo(body []byte) ErrorInfo {
+	var wrapped struct {
+		Error json.RawMessage `json:"error"`
+	}
+	if json.Unmarshal(body, &wrapped) == nil && len(wrapped.Error) > 0 && wrapped.Error[0] == '{' {
+		return errorInfo(wrapped.Error)
+	}
+	return errorInfo(body)
+}
+
+// errorInfo extracts type and code from a current ({"type","code"} inside
+// "error") or legacy ({"object":"error","type","code"}) vLLM envelope. A
+// string "error" value is not parsed: it may be a free-text message.
+func errorInfo(raw []byte) ErrorInfo {
+	var fields struct {
+		Type json.RawMessage `json:"type"`
+		Code json.RawMessage `json:"code"`
+	}
+	if json.Unmarshal(raw, &fields) != nil {
+		return ErrorInfo{}
+	}
+	return ErrorInfo{Type: label(fields.Type), Code: label(fields.Code)}
+}
+
+// label keeps a JSON string or integer only if it is a short identifier, so
+// records and logs never carry arbitrary upstream text.
+func label(raw json.RawMessage) string {
+	var v any
+	if json.Unmarshal(raw, &v) != nil {
+		return ""
+	}
+	var s string
+	switch t := v.(type) {
+	case string:
+		s = t
+	case float64:
+		if t != float64(int64(t)) {
+			return ""
+		}
+		s = strconv.FormatInt(int64(t), 10)
+	default:
+		return ""
+	}
+	if s == "" || len(s) > 64 || strings.IndexFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '.' || r == '-')
+	}) >= 0 {
+		return "unrecognised"
+	}
+	return s
 }
 
 // NewTransport returns the shared HTTP/1.1 transport. maxConns 0 means no

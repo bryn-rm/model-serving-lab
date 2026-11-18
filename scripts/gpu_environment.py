@@ -217,14 +217,25 @@ def main():
         pins['LAB_ADMISSION_CAP'] = str(args.admission_cap)
     compose = ['docker', 'compose', '--env-file', args.env_file, '-f', 'deploy/compose.gpu.yaml']
     env, mismatches = build(pins, collect(pins, args.engine.rstrip('/'), args.admin.rstrip('/'), compose))
-    env['consistency_mismatches'] = mismatches
-    with open(args.output, 'w', encoding='utf-8') as handle:
+    missing = [key for key in BENCH_KEYS if env.get(key) is None]
+    env['consistency_mismatches'] = mismatches + [f'{key} unavailable' for key in missing]
+    # Only a consistent snapshot is written to --output, so a failed check can
+    # never label a run. A stale snapshot from an earlier check is removed and
+    # the rejected one is kept beside it as evidence (`lab bench` refuses it).
+    target, stale = args.output, args.output + '.rejected.json'
+    if env['consistency_mismatches']:
+        target, stale = stale, args.output
+    try:
+        os.remove(stale)
+    except FileNotFoundError:
+        pass
+    with open(target, 'w', encoding='utf-8') as handle:
         json.dump(env, handle, indent=2)
         handle.write('\n')
-    missing = [key for key in BENCH_KEYS if env.get(key) is None]
-    for problem in mismatches + [f'{key} unavailable' for key in missing]:
+    for problem in env['consistency_mismatches']:
         print('environment:', problem, file=sys.stderr)
-    if mismatches or missing:
+    if env['consistency_mismatches']:
+        print(f'environment: snapshot REJECTED; evidence in {target}; {args.output} not written', file=sys.stderr)
         return 1
     print(args.output)
     return 0

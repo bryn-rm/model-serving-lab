@@ -68,7 +68,14 @@ capacity or token latency.
   errors get at most a 5 ms EOF drain (64 KiB);
   timing ends before that cleanup. This allows client connection reuse without
   an unbounded EOF wait. Gateway upstream reuse is observed separately, not assumed.
-- Environment settings are supplied as a saved JSON object. Unknown engine,
+- Error envelopes contribute only their `type` and `code` fields
+  (`server_error_type`/`server_error_code`, short identifiers only). Added
+  before any GPU run so mid-stream engine errors can be classified without
+  saving messages; records without them remain valid.
+- Environment settings are supplied as a saved JSON object. A snapshot whose
+  `consistency_mismatches` list is nonempty is refused, so a stack that
+  contradicts its declared condition cannot label a run. Gateway admin metrics
+  are captured per repeat (`--gateway-metrics-url`) beside engine metrics. Unknown engine,
   GPU and revision fields remain explicitly null. Metric captures have status
   evidence; the fixture mock has no native engine metrics. Warm-up is sequential,
   excluded from measured counts, saved separately, and fully completed before

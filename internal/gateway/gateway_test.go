@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -789,4 +790,61 @@ func TestEmptyUpstreamErrorIsFailure(t *testing.T) {
 	resp.Body.Close()
 	waitFor(t, "upstream error outcome", func() bool { return outcomes(g, outcomeUpstreamError, true) == 1 })
 	idle(t, g)
+}
+
+// lockedBuffer collects log output written from handler goroutines.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+func (b *lockedBuffer) String() string { b.mu.Lock(); defer b.mu.Unlock(); return b.buf.String() }
+
+func TestUpstreamErrorFieldsLoggedWithoutMessages(t *testing.T) {
+	for name, upstream := range map[string]http.HandlerFunc{
+		"sse": func(w http.ResponseWriter, r *http.Request) {
+			sseHeaders(w)
+			send(w, event(`{"choices":[{"delta":{"content":"a"}}]}`))
+			send(w, event(`{"error":{"message":"prompt echo","type":"BadRequestError","code":400}}`)+event("[DONE]"))
+		},
+		"http": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"object":"error","message":"prompt echo","type":"BadRequestError","code":400}`)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			up := httptest.NewServer(upstream)
+			defer up.Close()
+			logs := &lockedBuffer{}
+			g, err := New(testConfig(up.URL), slog.New(slog.NewJSONHandler(logs, nil)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			gw := httptest.NewServer(g.Handler())
+			defer func() { gw.Close(); g.client.CloseIdleConnections() }()
+			resp := post(context.Background(), t, gw.URL+"/v1/chat/completions", gatewayKey, validBody)
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			waitFor(t, "finished log", func() bool { return strings.Contains(logs.String(), "request finished") })
+			var finished map[string]any
+			for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+				var entry map[string]any
+				if json.Unmarshal([]byte(line), &entry) == nil && entry["msg"] == "request finished" {
+					finished = entry
+				}
+			}
+			if finished["upstream_error_type"] != "BadRequestError" || finished["upstream_error_code"] != "400" {
+				t.Fatalf("structured upstream error not logged: %v", finished)
+			}
+			if strings.Contains(logs.String(), "prompt echo") {
+				t.Fatal("upstream error message logged")
+			}
+		})
+	}
 }

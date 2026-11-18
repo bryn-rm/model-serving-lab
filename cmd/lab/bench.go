@@ -86,6 +86,7 @@ func runBench(args []string) int {
 	f.Float64Var(&c.ObjectiveMS, "objective-ms", c.ObjectiveMS, "first-text goodput objective in milliseconds")
 	f.IntVar(&c.MaxEventBytes, "max-event-bytes", c.MaxEventBytes, "SSE event bound")
 	f.StringVar(&c.MetricsURL, "metrics-url", c.MetricsURL, "private engine metrics URL; empty records unavailable")
+	f.StringVar(&c.GatewayMetricsURL, "gateway-metrics-url", c.GatewayMetricsURL, "private gateway admin metrics URL; empty records unavailable")
 	if err := f.Parse(args); err != nil {
 		return 2
 	}

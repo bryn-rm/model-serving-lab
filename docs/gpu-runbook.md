@@ -44,7 +44,8 @@ git status --short    # commit and push before renting the GPU
 
 ```sh
 git clone <your-repo-url> model-serving-lab && cd model-serving-lab
-git checkout <commit-sha-from-step-0>
+# A named branch, so the step 3 pin commit is not left on a detached HEAD:
+git switch -c gpu-pilot <commit-sha-from-step-0>
 # Build bin/lab (Go not required on the host; uses the pinned golang:1.27.3 image):
 make lab-docker
 ./bin/lab 2>&1 | head -1    # prints usage
@@ -80,7 +81,8 @@ scripts/gpu-preflight.sh "$S/preflight" --write
 git diff configs/gpu-pilot.env       # digest, 40-hex revision, prefix-cache flag spelling
 make gpu-config-check
 set -a; . configs/gpu-pilot.env; set +a
-git commit -am "Pin vLLM image digest and Qwen2.5-7B-Instruct revision"   # push when possible
+git commit -am "Pin vLLM image digest and Qwen2.5-7B-Instruct revision"
+git push -u origin gpu-pilot     # or include the commit in the step 12 archive (git bundle) if the host cannot push
 ```
 
 The preflight fails on any of the following. All evidence goes to `$S/preflight/`:
@@ -154,7 +156,10 @@ arguments are never written into the snapshot. It also checks:
 - `max_model_len` from `/v1/models`.
 - The `vllm:cache_config_info` labels: block size, GPU blocks, prefix caching and memory utilisation.
 
-It exits nonzero on contradictions or missing required evidence. `lab bench
+It exits nonzero on contradictions or missing required evidence. In that case
+it does not write `$S/environment.json` (and removes a stale one); the rejected
+snapshot is saved as `$S/environment.json.rejected.json` for diagnosis, and
+`lab bench` refuses any snapshot with consistency mismatches. `lab bench
 --environment` saves it into every run's `manifest.json`, alongside the bench's
 own request settings, body hashes, deadlines, transport settings, git SHA and
 dirty state, and before/after `/metrics` scrapes. Re-run this step after any
@@ -200,7 +205,9 @@ copies go to `$S/capture/sanitized`, where response IDs, `created` and
 `date`/request-ID headers are replaced while framing and text are kept. The
 sanitiser refuses to run if a credential value appears in any raw file.
 Mid-stream engine errors cannot be provoked reliably. Record any that occur
-during the pilot (`error_code` `sse_error` in `requests.jsonl`).
+during the pilot: `requests.jsonl` keeps `error_code` `sse_error` with the
+envelope's `server_error_type`/`server_error_code`, and the gateway log adds
+`upstream_error_type`/`upstream_error_code` (messages are never saved).
 
 ## 9. Cancellation (both paths)
 
@@ -224,7 +231,7 @@ common=(--workload "$S/inputs/workload.json" --environment "$S/environment.json"
   --metrics-url http://127.0.0.1:8000/metrics --repeats 1 --warmup 4 --max-inflight 256)
 direct=(--target gpu-direct --url http://127.0.0.1:8000/v1/chat/completions --api-key-env LAB_UPSTREAM_API_KEY)
 gateway=(--target gpu-gateway --url http://127.0.0.1:8080/v1/chat/completions --api-key-env LAB_GATEWAY_API_KEY
-  --gateway-admission-cap "$LAB_ADMISSION_CAP")
+  --gateway-admission-cap "$LAB_ADMISSION_CAP" --gateway-metrics-url http://127.0.0.1:8081/metrics)
 
 for c in 1 4 8 16 32 64 128; do
   wait_idle
@@ -240,6 +247,11 @@ for c in 1 16; do
 done
 python3 scripts/pilot_table.py "$S/runs" | tee "$S/pilot-closed.md"
 ```
+
+Gateway runs also save `repeat-N-{before,after}.gateway.prom`. Check
+`lab_gateway_upstream_connections_total{reused=...}` deltas: if most upstream
+connections are new rather than reused, the gateway arm pays a TCP connect per
+request that the direct arm does not; record it before comparing arms.
 
 Stop early with Ctrl-C when a point shows a clear latency breach, failures,
 a throughput plateau or memory/preemption trouble. The first Ctrl-C drains

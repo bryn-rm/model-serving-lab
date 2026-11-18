@@ -150,14 +150,34 @@ class EnvironmentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             output = str(Path(root, 'environment.json'))
             pins = dict(PINS, VLLM_IMAGE_DIGEST='sha256:' + 'a' * 64, MODEL_REVISION='b' * 40)
+            Path(output).write_text('{"consistency_mismatches": []}\n')  # stale earlier snapshot
             with mock.patch.object(gpu_environment, 'read_env_file', return_value=pins), \
                     mock.patch.object(gpu_environment, 'collect', return_value={}), \
                     mock.patch('sys.argv', ['gpu_environment.py', '--output', output, '--admission-cap', '8']), \
                     contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(gpu_environment.main(), 1)
-            saved = json.loads(Path(output).read_text())
+            # A rejected snapshot never occupies --output, and a stale one is removed.
+            self.assertFalse(Path(output).exists())
+            saved = json.loads(Path(output + '.rejected.json').read_text())
             self.assertEqual(saved['gateway']['admission_cap'], 8)
             self.assertTrue(saved['consistency_mismatches'])
+            self.assertIn('gpu unavailable', saved['consistency_mismatches'])
+
+    def test_main_writes_consistent_snapshot_and_clears_rejection(self):
+        import contextlib
+        import io
+        with tempfile.TemporaryDirectory() as root:
+            output = str(Path(root, 'environment.json'))
+            env = {key: 'evidence' for key in gpu_environment.BENCH_KEYS}
+            Path(output + '.rejected.json').write_text('{}\n')  # earlier failed attempt
+            with mock.patch.object(gpu_environment, 'read_env_file', return_value=dict(PINS)), \
+                    mock.patch.object(gpu_environment, 'collect', return_value={}), \
+                    mock.patch.object(gpu_environment, 'build', return_value=(env, [])), \
+                    mock.patch('sys.argv', ['gpu_environment.py', '--output', output]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(gpu_environment.main(), 0)
+            self.assertEqual(json.loads(Path(output).read_text())['consistency_mismatches'], [])
+            self.assertFalse(Path(output + '.rejected.json').exists())
 
     def test_collect_checks_running_containers_without_reading_secrets(self):
         pins = dict(PINS, VLLM_IMAGE_DIGEST='sha256:' + 'a' * 64, MODEL_REVISION='b' * 40)

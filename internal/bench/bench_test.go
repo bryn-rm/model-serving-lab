@@ -638,3 +638,103 @@ func TestDrainDefaultsToTotalDeadlineAndPoolCoversInflight(t *testing.T) {
 		t.Fatal("default drain should track the total deadline")
 	}
 }
+
+func TestServerErrorFieldsRecordedWithoutMessages(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status       int
+		body         string
+		code, eType  string
+		wantErrorTag string
+	}{
+		"sse-current": {200, textEvent + "data: {\"error\":{\"message\":\"prompt echo\",\"type\":\"BadRequestError\",\"code\":400}}\n\n" + doneEvent, "400", "BadRequestError", "sse_error"},
+		"http-legacy": {400, `{"object":"error","message":"prompt echo","type":"BadRequestError","code":400}`, "400", "BadRequestError", "http_400"},
+		"http-text":   {502, "prompt echo", "", "", "http_502"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				io.Copy(io.Discard, r.Body)
+				if tc.status == 200 {
+					w.Header().Set("Content-Type", "text/event-stream")
+				} else {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(tc.status)
+				}
+				io.WriteString(w, tc.body)
+			}))
+			defer up.Close()
+			c := config(t, up.URL)
+			p := workload().Prompts[0]
+			cl := client()
+			defer cl.CloseIdleConnections()
+			r := execute(context.Background(), cl, c, p, baseRecord(c, p, "test", 1, 0, false, true), time.Now())
+			if r.ErrorCode != tc.wantErrorTag || r.ServerErrorCode != tc.code || r.ServerErrorType != tc.eType {
+				t.Fatalf("%+v", r)
+			}
+			b, _ := json.Marshal(r)
+			if strings.Contains(string(b), "prompt echo") {
+				t.Fatal("server message copied into record")
+			}
+		})
+	}
+}
+
+func TestInconsistentEnvironmentSnapshotRefused(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { success(w) }))
+	defer up.Close()
+	c := config(t, up.URL)
+	c.Environment = json.RawMessage(`{"consistency_mismatches":["max_model_len: pinned 4096, running 2048"]}`)
+	if dir, err := Run(context.Background(), c, workload(), Schedule{}); err == nil || dir != "" {
+		t.Fatalf("mismatched snapshot accepted: %q %v", dir, err)
+	}
+	c.Environment = json.RawMessage(`{"consistency_mismatches":"garbled"}`)
+	if _, err := Run(context.Background(), c, workload(), Schedule{}); err == nil {
+		t.Fatal("malformed mismatch list accepted")
+	}
+	c.Environment = json.RawMessage(`{"consistency_mismatches":[]}`)
+	if _, err := Run(context.Background(), c, workload(), Schedule{}); err != nil {
+		t.Fatalf("consistent snapshot refused: %v", err)
+	}
+}
+
+func TestGatewayMetricsCapturedSeparately(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { success(w) }))
+	defer up.Close()
+	admin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "lab_gateway_inflight_requests 0\n")
+	}))
+	defer admin.Close()
+	c := config(t, up.URL)
+	c.GatewayMetricsURL = admin.URL + "/metrics"
+	dir, err := Run(context.Background(), c, workload(), Schedule{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"repeat-1-before.gateway.prom", "repeat-1-after.gateway.prom"} {
+		if b, e := os.ReadFile(filepath.Join(dir, name)); e != nil || !strings.Contains(string(b), "lab_gateway_inflight_requests") {
+			t.Fatalf("%s: %v %q", name, e, b)
+		}
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
+	var m Manifest
+	if e := json.Unmarshal(b, &m); e != nil {
+		t.Fatal(e)
+	}
+	got := map[string]string{}
+	for _, capture := range m.Captures {
+		got[capture.Source+" "+capture.Path] = capture.Status
+	}
+	want := map[string]string{
+		"metrics_url repeat-1-before.prom":                 "unavailable_no_metrics_url",
+		"metrics_url repeat-1-after.prom":                  "unavailable_no_metrics_url",
+		"gateway_metrics_url repeat-1-before.gateway.prom": "captured",
+		"gateway_metrics_url repeat-1-after.gateway.prom":  "captured",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("captures %v", got)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Fatalf("capture %s = %q; all %v", k, got[k], got)
+		}
+	}
+}

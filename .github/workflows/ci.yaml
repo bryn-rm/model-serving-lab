@@ -13,3 +13,5 @@ jobs:
           cache: false
       - run: make check
       - run: make build
+      # Python helpers that guard GPU measurement labels (renders compose with placeholders).
+      - run: make gpu-config-check
